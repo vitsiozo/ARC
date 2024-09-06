@@ -105,7 +105,7 @@ def get_task_prediction(challenge_tasks, task_id, test_input_index) -> List[List
     chain = prompt | llm | parser
 
     # Optional, print out the prompt if you want to see it. If you use LangSmith you could view this there as well.
-    # print (f"Prompt:\n\n{prompt.format(task_string=task_string)}")
+    print (f"Prompt:\n\n{prompt.format(task_string=task_string)}")
     
     # Finally, go get your prediction from your LLM. Ths will make the API call.
     output = chain.invoke({"task_string": task_string})
@@ -194,7 +194,7 @@ while True:
 
 pp = pprint.PrettyPrinter(indent=4)
 
-pp.pprint(challenges[task_id])
+#pp.pprint(challenges[task_id])
 
 # Run the model on a single task
 submission = run_model(challenges, task_id)
