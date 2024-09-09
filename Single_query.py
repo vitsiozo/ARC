@@ -15,7 +15,7 @@ from langchain_core.pydantic_v1 import BaseModel, Field # To help with defining 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Choose the model to use
-llm = ChatOpenAI(model='gpt-4o', api_key=OPENAI_API_KEY, max_tokens=3000)
+llm = ChatOpenAI(model='gpt-4o-mini', api_key=OPENAI_API_KEY, max_tokens=3000)
 
 task_sets = {
     'training' : {
@@ -104,8 +104,11 @@ def get_task_prediction(challenge_tasks, task_id, test_input_index) -> List[List
     # Wrap up your chain with LCEL
     chain = prompt | llm | parser
 
+    #Print the format instructions. 
+    print(parser.get_format_instructions())
+
     # Optional, print out the prompt if you want to see it. If you use LangSmith you could view this there as well.
-    print (f"Prompt:\n\n{prompt.format(task_string=task_string)}")
+    #print (f"Prompt:\n\n{prompt.format(task_string=task_string)}")
     
     # Finally, go get your prediction from your LLM. Ths will make the API call.
     output = chain.invoke({"task_string": task_string})
