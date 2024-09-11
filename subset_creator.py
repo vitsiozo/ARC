@@ -32,7 +32,7 @@ def load_tasks_from_file(task_set):
 challenges, solutions = load_tasks_from_file(task_set=task_sets['training'])
 
 # Function to allow the user to select tasks
-def select_tasks(challenges, solutions, num_tasks=10):
+def select_tasks(challenges, solutions, num_tasks=50):
     selected_challenges = {}
     selected_solutions = {}
     valid_keys = set(challenges.keys())
@@ -60,7 +60,7 @@ def select_tasks(challenges, solutions, num_tasks=10):
     return selected_challenges, selected_solutions
 
 # Function to save selected data to JSON files
-def save_selected_data_to_json(selected_challenges, selected_solutions, challenges_file='selected_challenges.json', solutions_file='selected_solutions.json'):
+def save_selected_data_to_json(selected_challenges, selected_solutions, challenges_file='50_challenges.json', solutions_file='50_solutions.json'):
     # Save selected challenges to a JSON file
     with open(challenges_file, 'w') as challenges_json:
         json.dump(selected_challenges, challenges_json)  

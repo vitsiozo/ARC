@@ -19,8 +19,8 @@ llm = ChatOpenAI(model='gpt-4o-mini', api_key=OPENAI_API_KEY, max_tokens=3000)
 
 task_sets = {
     'training' : {
-        'challenges' : '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/selected_challenges.json',
-        'solutions' : '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/selected_solutions.json',
+        'challenges' : '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/50_challenges.json',
+        'solutions' : '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/50_solutions.json',
     }
 }
 
@@ -121,6 +121,11 @@ def get_task_prediction(challenge_tasks, task_id, test_input_index) -> List[List
     num_rows = len(prediction)
     num_cols = len(prediction[0]) if num_rows > 0 else 0
     print(f"    Prediction Grid Size: {num_rows}x{num_cols}\n")
+
+    # Print prediction
+    print(f"Prediction for Task ID {task_id}, Test Input Index {test_input_index}:")
+    for row in prediction:
+        print(row)
     
     return prediction
 
@@ -231,7 +236,9 @@ def score_submission(submission_file_name, solutions) -> Tuple[float, int]:
 
         task_score /= num_pairs
         total_score += task_score
+        #print(f"Score for Task {task_id}: {task_score}")  # Debug: print each task score
 
+    print(f"Total score: {total_score}, Total tasks scored: {total_tasks}")
     return {
         'total_score': total_score,
         'total_tasks_scored': total_tasks
@@ -240,6 +247,22 @@ def score_submission(submission_file_name, solutions) -> Tuple[float, int]:
 def main(task_set='training', NUM_TASKS=None, submission_file_name='submission.json'):
     # Load datasets
     challenges, solutions = load_tasks_from_file(task_set=task_sets[task_set])
+
+    # Ask the user for the number of tasks they want to run
+    while True:
+        try:
+            NUM_TASKS = input("Enter the number of tasks you want to process (or 'all' to process all tasks): ")
+            if NUM_TASKS.lower() == 'all':
+                NUM_TASKS = None  # None will process all tasks
+                break
+            else:
+                NUM_TASKS = int(NUM_TASKS)  # Convert input to integer
+                if NUM_TASKS < 1:
+                    print("Please enter a positive number.")
+                else:
+                    break  # Break the loop if input is valid
+        except ValueError:
+            print("Invalid input. Please enter a numerical value or 'all'.")
 
     # # Run the model
     submission = run_model(challenges, NUM_TASKS=NUM_TASKS)
@@ -252,4 +275,6 @@ def main(task_set='training', NUM_TASKS=None, submission_file_name='submission.j
 
     print(f"Final score: {score_result['total_score']} of {score_result['total_tasks_scored']} ({round(score_result['total_score']/score_result['total_tasks_scored'] * 100, 2)}%)")
 
-main(task_set='training', NUM_TASKS=10)
+# Start the program
+if __name__ == "__main__":
+    main(task_set='training')
