@@ -12,7 +12,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Choose the model to use
 model_name = 'gpt-4o-mini'
-llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.2)
+llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=1.0)
 
 # Directory for logging files
 log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_output'
@@ -90,12 +90,28 @@ def get_task_prediction(challenge_tasks, solutions, task_id, test_input_index) -
     # Get the string representation of the task
     task_string = json_task_to_string(challenge_tasks, task_id, test_input_index)
 
-    # Prompt template
-    prompt = PromptTemplate(
+    # Prompt template 1
+    '''prompt = PromptTemplate(
         template="You are a chatbot with human-like reasoning and inference capabilities, adept at solving tasks concisely. "
                  "Let's engage in reasoning and logic-based tasks. Each task will demonstrate a transformation from an input to an output grid. "
                  "At the end, you'll receive a new input grid. "
                  "Your task is to determine its corresponding output based on the logic of transformations that is found in the examples. "
+                 "Do not give any justification for your answer, just provide a list of lists as the output.\n\n{task_string}\n",
+        input_variables=["task_string"]
+    )'''
+
+    # Prompt template 2
+    prompt = PromptTemplate(
+        template="You are a chatbot that is adept at finding patterns and solving reasoning tasks. "
+                 "Let's engage in a series of puzzles where you are asked to find the pattern in a set of examples and based on that to make a prediciton on a new input. "
+                 "I want you to visualise the set of numbers that will be presented to you as a 2-dimensional grid. "
+                 "Each row of numbers represents a row of pixels in the grid. "
+                 "Each number on this grid represents a different colour. Number 1 is the black colour and it represented background. "
+                 "The rest of the colours can signify different objects or shapes or various patterns formed on the grid. "
+                 "At the beginning of each task you will be presented with a set of examples. "
+                 "You will see the example input, followed by the example output. "
+                 "To get from the example input to the example output a specific pattern or transformation has been applied. " 
+                 "Your task is to identify this pattern and apply it to the test input to get the final output. "
                  "Do not give any justification for your answer, just provide a list of lists as the output.\n\n{task_string}\n",
         input_variables=["task_string"]
     )
