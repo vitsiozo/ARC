@@ -106,7 +106,7 @@ def get_task_prediction(challenge_tasks, solutions, task_id, test_input_index) -
                  "Let's engage in a series of puzzles where you are asked to find the pattern in a set of examples and based on that to make a prediciton on a new input. "
                  "I want you to visualise the set of numbers that will be presented to you as a 2-dimensional grid. "
                  "Each row of numbers represents a row of pixels in the grid. "
-                 "Each number on this grid represents a different colour. Number 1 is the black colour and it represented background. "
+                 "Each number on this grid represents a different colour. Number 0 is the black colour and it represented background. "
                  "The rest of the colours can signify different objects or shapes or various patterns formed on the grid. "
                  "At the beginning of each task you will be presented with a set of examples. "
                  "You will see the example input, followed by the example output. "
