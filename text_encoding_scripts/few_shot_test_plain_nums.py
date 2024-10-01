@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 from typing import List, Tuple
 from langchain_openai import ChatOpenAI  # To work with OpenAI
+from langchain_anthropic import ChatAnthropic # To work with Anthropic
 from langchain_core.prompts import PromptTemplate  # To help create our prompt
 
 # Get api key for chatgpt

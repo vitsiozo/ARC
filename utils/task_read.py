@@ -24,9 +24,9 @@ test_challenges = load_json(base_path + 'arc-agi_test_challenges.json')
 # Do some data exploration
 
 # Print the number of challenges and solutions
-#print (f'Number of training challenges = {len(training_challenges)}')
+print (f'Number of training challenges = {len(training_challenges)}')
 #print (f'Number of training solutions = {len(training_solutions)}')
-#print (f'Number of evaluation challenges = {len(evaluation_challenges)}')
+print (f'Number of evaluation challenges = {len(evaluation_challenges)}')
 #print (f'Number of evaluation solutions = {len(evaluation_solutions)}')
 #print (f'Number of test challenges = {len(test_challenges)}')
 
