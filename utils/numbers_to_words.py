@@ -7,10 +7,10 @@ color_mapping = {
     2: "red",
     3: "green",
     4: "yellow",
-    5: "grey",
-    6: "fuchsia",
+    5: "gray",
+    6: "magenta",
     7: "orange",
-    8: "teal",
+    8: "cyan",
     9: "brown"
 }
 
@@ -44,6 +44,6 @@ def process_json(input_file, output_file):
         json.dump(transformed_data, outfile)
 
 # Example usage: replace 'input.json' with your actual input file and 'output.json' with the desired output file name.
-input_file = '50_solutions.json'  # Replace with your input file
-output_file = '50_word_in_quotes_solutions.json'  # Replace with your output file
+input_file = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_solutions.json'  # Replace with your input file
+output_file = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_word_in_quotes_solutions.json'  # Replace with your output file
 process_json(input_file, output_file)

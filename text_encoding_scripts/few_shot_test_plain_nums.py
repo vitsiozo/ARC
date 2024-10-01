@@ -1,6 +1,5 @@
 import os
 import json
-import re
 import logging
 from datetime import datetime
 from typing import List, Tuple
@@ -8,38 +7,22 @@ from langchain_openai import ChatOpenAI  # To work with OpenAI
 from langchain_anthropic import ChatAnthropic # To work with Anthropic
 from langchain_core.prompts import PromptTemplate  # To help create our prompt
 
-# Get api key for chatgpt
+# Get api keys for OpenAI and Anthropic
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
-# Choose the model to use
-model_name = 'gpt-4o-mini'
-llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.4)
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Directory for logging files
-log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_output'
+log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/numbers_plain'
 
-# Generate log file name based on the model and timestamp
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_file_name = os.path.join(log_dir, f"{model_name}_{timestamp}.log")
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,  # Set log level
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file_name),  # Log to file
-        logging.StreamHandler()  # Also log to console
-    ]
-)
-logger = logging.getLogger(__name__)
-
+# Directory where tasks are stored
 task_sets = {
     'training': {
-        'challenges': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/50_challenges.json',
-        'solutions': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/50_solutions.json',
+        'challenges': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_challenges.json',
+        'solutions': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_solutions.json',
     }
 }
 
+# Function to load ARC tasks from JSON files
 def load_tasks_from_file(task_set):
     with open(task_set['challenges'], "r") as tasks:
         challenges = json.load(tasks)
@@ -49,6 +32,7 @@ def load_tasks_from_file(task_set):
 
     return challenges, solutions
 
+# Function to convert a task to a formatted string
 def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: int) -> str:
     json_task = challenge_tasks[task_id]
 
@@ -85,7 +69,7 @@ def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: i
 
     return final_output
 
-
+# Function to parse the model's response into a grid format
 def parse_prediction(prediction_string: str) -> List[List[int]]:
     # Split the string into lines
     lines = prediction_string.strip().split('\n')
@@ -98,38 +82,25 @@ def parse_prediction(prediction_string: str) -> List[List[int]]:
         prediction.append(row)
     return prediction
 
-def get_task_prediction(challenge_tasks, solutions, task_id, test_input_index) -> List[List]:
+# Function to get a prediction for a single ARC task
+def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_index) -> List[List]:
 
     # Get the string representation of the task
     task_string = json_task_to_string(challenge_tasks, task_id, test_input_index)
 
     # Prompt template 1
-    '''prompt = PromptTemplate(
-        template="You are a chatbot with human-like reasoning and inference capabilities, adept at solving tasks concisely. "
-                 "Let's engage in reasoning and logic-based tasks. Each task will demonstrate a transformation from an input to an output grid. "
-                 "At the end, you'll receive a new input grid. "
-                 "Your task is to determine its corresponding output based on the logic of transformations that is found in the examples. "
-                 "Do not give any justification for your answer, just provide a list of lists as the output.\n\n{task_string}\n",
-        input_variables=["task_string"]
-    )'''
-
-    # Prompt template 2
     prompt = PromptTemplate(
-    template="You are a chatbot that is adept at finding patterns and solving reasoning tasks. "
-             "Let's engage in a series of puzzles where you are asked to find the pattern in a set of examples and based on that to make a prediction on a new input. "
-             "Visualize the set of numbers presented as a 2-dimensional grid. "
-             "Each row of numbers represents a row of pixels in the grid. "
-             "Each number on this grid represents a different color. Number 0 is black and represents the background. "
-             "The arrangement of the numbers signifies different objects, shapes, or patterns formed on the grid. "
-             "At the beginning of each task, you will be presented with a set of examples. "
-             "You will see the example input followed by the example output. "
-             "To get from the example input to the example output, a specific pattern or transformation has been applied. "
-             "The data will be presented as numbers, one after another, with no spaces or commas, and newlines to designate new rows. "
-             "Your task is to identify this pattern or transformation and apply it to the test input to get the final output. "
-             "Do not give any justification for your answer; just provide the output grid in the same format: no brackets or commas, just numbers, with each line representing a row."
-             "\n\n{task_string}\n",
-    input_variables=["task_string"]
-)
+        template="You are a chatbot with human-like reasoning and abstraction capabilities. "
+                 "We will engage in tasks that require reasoning and logic. "
+                 "Each task will demonstrate a transformation from an input to an output grid. "
+                 "For each task, you will receive a few examples that demonstate the transformation from input to output. "
+                 "After the examples you'll receive a new input grid called Test. "                
+                 "Your task is to determine the corresponding output grid from the transformation you are able to infer from the examples. "
+                 "Use the same format as the one provided in the examples for your answer. "
+                 "Do not give any justification for your answer, just provide the output grid. "
+                 "\n\n{task_string}\n",
+        input_variables=["task_string"]
+    )
 
     # Generate the full prompt
     formatted_prompt = prompt.format(task_string=task_string)
@@ -139,6 +110,14 @@ def get_task_prediction(challenge_tasks, solutions, task_id, test_input_index) -
 
     # Call the model and get the prediction
     response = llm.invoke(formatted_prompt)
+
+    # Log the raw LLM response for debugging
+    logger.info(f"Raw LLM Response: {response.content}")
+
+    # Check if the response content is empty
+    if not response.content.strip():
+        logger.error(f"Empty response received from LLM for Task ID {task_id}, Test Input Index {test_input_index}")
+        return []  # Return an empty list if the response is empty
 
     # Extract the actual prediction from the response content
     prediction_string = response.content
@@ -160,7 +139,8 @@ def get_task_prediction(challenge_tasks, solutions, task_id, test_input_index) -
 
     return prediction
 
-def run_model(challenges, solutions, NUM_ATTEMPTS=2, RETRY_ATTEMPTS=3, NUM_TASKS=None):
+# Function to run the model on ARC tasks
+def run_model(challenges, solutions, logger, NUM_ATTEMPTS=1, RETRY_ATTEMPTS=3, NUM_TASKS=None):
 
     # A dict to hold the results returned after all predictions are made
     results = {}
@@ -187,6 +167,7 @@ def run_model(challenges, solutions, NUM_ATTEMPTS=2, RETRY_ATTEMPTS=3, NUM_TASKS
                         logger.info(f"    Predicting attempt #{attempt}, retry #{retry + 1}")
                         prediction = get_task_prediction(challenge_tasks=challenges,
                                                          solutions=solutions,
+                                                         logger=logger,
                                                          task_id=task_id,
                                                          test_input_index=t)
 
@@ -211,7 +192,8 @@ def run_model(challenges, solutions, NUM_ATTEMPTS=2, RETRY_ATTEMPTS=3, NUM_TASKS
 
     return results
 
-def score_results(results, solutions) -> Tuple[float, int]:
+# Function to score the results of the ARC tasks
+def score_results(results, solutions, logger) -> Tuple[float, int]:
     total_score = 0
     total_tasks = 0
 
@@ -248,9 +230,62 @@ def score_results(results, solutions) -> Tuple[float, int]:
         'total_tasks_scored': total_tasks
     }
 
-def main(task_set='training', NUM_TASKS=None):
-    # Load datasets
-    challenges, solutions = load_tasks_from_file(task_set=task_sets[task_set])
+# Main function that prompts for model and runs the tasks
+def main(task_set='training'):
+    global model_name, llm
+    # Prompt the user to select the model
+    print("Select the model to use:")
+    print("1: GPT-3.5 (gpt-3.5-turbo)")
+    print("2: GPT-4o Mini (gpt-4o-mini)")
+    print("3: GPT-4o (gpt-4o)")
+    print("4: o1 Mini (o1-mini)")
+    print("5: o1 Preview (o1-preview)")
+    print("6: Claude-3.5 Sonnet (claude-3-5-sonnet-20240620)")
+    
+    # Ask user to select the model
+    while True:
+        model_choice = input("Enter the number corresponding to the model (1 to 6): ")
+        if model_choice == "1":
+            model_name = "gpt-3.5-turbo"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "2":
+            model_name = "gpt-4o-mini"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "3":
+            model_name = "gpt-4o"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "4":
+            model_name = "o1-mini"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "5":
+            model_name = "o1-preview"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "6":
+            model_name = "claude-3-5-sonnet-20240620"
+            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        else:
+            print("Invalid input. Please enter 1, 2, 3, 4, 5, or 6.")    
+
+    # Generate log file name based on the selected model and timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file_name = os.path.join(log_dir, f"{model_name}_{timestamp}.log")
+
+    # Set up logging
+    logging.basicConfig(
+        level=logging.INFO,  # Set log level
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_name),  # Log to file
+            logging.StreamHandler()  # Also log to console
+        ]
+    )
+    logger = logging.getLogger(__name__)        
 
     # Ask the user for the number of tasks they want to run
     while True:
@@ -268,11 +303,14 @@ def main(task_set='training', NUM_TASKS=None):
         except ValueError:
             logger.error("Invalid input. Please enter a numerical value or 'all'.")
 
+    # Load datasets
+    challenges, solutions = load_tasks_from_file(task_set=task_sets[task_set])        
+
     # Run the model
-    test_results = run_model(challenges, solutions, NUM_TASKS=NUM_TASKS)
+    test_results = run_model(challenges, solutions, logger, NUM_TASKS=NUM_TASKS)
 
     # Score the results
-    score_result = score_results(results=test_results, solutions=solutions)
+    score_result = score_results(results=test_results, solutions=solutions, logger=logger)
 
     logger.info(f"Model name: {model_name}, Model temperature: {llm.temperature}")
     logger.info(f"Final score: {score_result['total_score']} of {score_result['total_tasks_scored']} "

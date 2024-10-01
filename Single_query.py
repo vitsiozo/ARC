@@ -7,11 +7,12 @@ from typing import List, Tuple
 
 import langchain
 import anthropic
+import pydantic
 from langchain_openai import ChatOpenAI # To work with OpenAI
-from langchain.chat_models import ChatAnthropic # To work with Anthropic
+from langchain_anthropic import ChatAnthropic # To work with Anthropic
 from langchain_core.output_parsers import JsonOutputParser # To help with structured output
 from langchain_core.prompts import PromptTemplate # To help create our prompt
-from langchain_core.pydantic_v1 import BaseModel, Field # To help with defining what output structure we want
+from pydantic import BaseModel, Field # To help with defining what output structure we want
 
 # Get api key for chatgpt
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')

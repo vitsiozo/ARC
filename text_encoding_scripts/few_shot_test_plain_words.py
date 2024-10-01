@@ -1,44 +1,29 @@
 import os
-import json
 import re
+import json
 import logging
 from datetime import datetime
 from typing import List, Tuple
 from langchain_openai import ChatOpenAI  # To work with OpenAI
+from langchain_anthropic import ChatAnthropic # To work with Anthropic
 from langchain_core.prompts import PromptTemplate  # To help create our prompt
 
-# Get api key for chatgpt
+# Get api keys for OpenAI and Anthropic
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-
-# Choose the model to use
-model_name = 'gpt-4o-mini'
-llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Directory for logging files
-log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_output'
+log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/words_plain'
 
-# Generate log file name based on the model and timestamp
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_file_name = os.path.join(log_dir, f"{model_name}_{timestamp}.log")
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,  # Set log level
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file_name),  # Log to file
-        logging.StreamHandler()  # Also log to console
-    ]
-)
-logger = logging.getLogger(__name__)
-
+# Directory where tasks are stored
 task_sets = {
     'training': {
-        'challenges': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/50_word_in_quotes_challenges.json',
-        'solutions': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/50_word_in_quotes_solutions.json',
+        'challenges': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_word_in_quotes_challenges.json',
+        'solutions': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_word_in_quotes_solutions.json',
     }
 }
 
+# Function to load ARC tasks from JSON files
 def load_tasks_from_file(task_set):
     with open(task_set['challenges'], "r") as tasks:
         challenges = json.load(tasks)
@@ -48,6 +33,7 @@ def load_tasks_from_file(task_set):
 
     return challenges, solutions
 
+# Function to convert a task to a formatted string
 def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: int) -> str:
     json_task = challenge_tasks[task_id]
     final_output = ""
@@ -77,9 +63,10 @@ def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: i
         final_output += "]\n\n"
 
     final_output += "Test\n["
-    for row in test_task[test_input_index]['input']:
+    for j, row in enumerate(test_task[test_input_index]['input']):
         final_output += f"\n{json.dumps(row)}"
-
+        if j != len(test_task[test_input_index]['input']) - 1:  # Add comma only if it's not the last row
+            final_output += ","
     final_output += "]\n\nYour Response:"
 
     return final_output
@@ -89,35 +76,22 @@ def sanitize_response(response_content: str) -> str:
     sanitized_response = re.sub(r'```json|```', '', response_content).strip()
     return sanitized_response
 
-def get_task_prediction(challenge_tasks, solutions, task_id, test_input_index) -> List[List]:
+def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_index) -> List[List]:
 
     # Get the string representation of the task
     task_string = json_task_to_string(challenge_tasks, task_id, test_input_index)
 
     # Prompt template 1
-    '''prompt = PromptTemplate(
-        template="You are a chatbot with human-like reasoning and inference capabilities, adept at solving tasks concisely. "
-                 "Let's engage in reasoning and logic-based tasks. Each task will demonstrate a transformation from an input to an output grid. "
-                 "At the end, you'll receive a new input grid. "
-                 "Your task is to determine its corresponding output based on the logic of transformations that is found in the examples. "
-                 "Do not give any justification for your answer, just provide a list of lists as the output.\n\n{task_string}\n",
-        input_variables=["task_string"]
-    )'''
-
-    # Prompt template 2
     prompt = PromptTemplate(
-        template="You are a chatbot that is adept at finding patterns and solving reasoning tasks. "
-                 "Let's engage in a series of puzzles where you are asked to find the pattern in a set of examples and based on that to make a prediciton on a new input. "
-                 "I want you to visualise the set of color names that will be presented to you as pixels in a 2-dimensional grid. "
-                 "Each row of color names represents a row of pixels in the grid. "
-                 "The color names are represented as strings. "
-                 "The color black is the background"
-                 "The rest of the colours can signify different objects or shapes or various patterns formed on the grid. "
-                 "At the beginning of each task you will be presented with a set of examples. "
-                 "You will see the example input, followed by the example output. "
-                 "To get from the example input to the example output a specific pattern or transformation has been applied. " 
-                 "Your task is to identify this pattern and apply it to the test input to get the final output. "
-                 "Do not give any justification for your answer, just return the output as a valid JSON list of lists, with each list containing the color names.\n\n{task_string}\n",
+        template="You are a chatbot with human-like reasoning and abstraction capabilities. "
+                 "We will engage in tasks that require reasoning and logic. "
+                 "Each task will demonstrate a transformation from an input to an output grid. "
+                 "For each task, you will receive a few examples that demonstate the transformation from input to output. "
+                 "After the examples you'll receive a new input grid called Test. "                
+                 "Your task is to determine the corresponding output grid from the transformation you are able to infer from the examples. "
+                 "Use the same format as the one provided in the examples for your answer. "
+                 "Do not give any justification for your answer, just provide the output grid. "
+                 "\n\n{task_string}\n",
         input_variables=["task_string"]
     )
 
@@ -132,6 +106,11 @@ def get_task_prediction(challenge_tasks, solutions, task_id, test_input_index) -
 
     # Log the raw LLM response for debugging
     #logger.info(f"Raw LLM Response: {response.content}")
+
+    # Check if the response content is empty
+    if not response.content.strip():
+        logger.error(f"Empty response received from LLM for Task ID {task_id}, Test Input Index {test_input_index}")
+        return []  # Return an empty list if the response is empty
 
     # Sanitize the response content to remove markdown-style code blocks
     prediction_string = sanitize_response(response.content)
@@ -154,7 +133,7 @@ def get_task_prediction(challenge_tasks, solutions, task_id, test_input_index) -
 
     return prediction
 
-def run_model(challenges, solutions, NUM_ATTEMPTS=2, RETRY_ATTEMPTS=3, NUM_TASKS=None):
+def run_model(challenges, solutions, logger, NUM_ATTEMPTS=1, RETRY_ATTEMPTS=3, NUM_TASKS=None):
 
     # A dict to hold the results returned after all predictions are made
     results = {}
@@ -181,6 +160,7 @@ def run_model(challenges, solutions, NUM_ATTEMPTS=2, RETRY_ATTEMPTS=3, NUM_TASKS
                         logger.info(f"    Predicting attempt #{attempt}, retry #{retry + 1}")
                         prediction = get_task_prediction(challenge_tasks=challenges,
                                                          solutions=solutions,
+                                                         logger=logger,
                                                          task_id=task_id,
                                                          test_input_index=t)
 
@@ -205,7 +185,7 @@ def run_model(challenges, solutions, NUM_ATTEMPTS=2, RETRY_ATTEMPTS=3, NUM_TASKS
 
     return results
 
-def score_results(results, solutions) -> Tuple[float, int]:
+def score_results(results, solutions, logger) -> Tuple[float, int]:
     total_score = 0
     total_tasks = 0
 
@@ -238,9 +218,61 @@ def score_results(results, solutions) -> Tuple[float, int]:
     }
 
 
-def main(task_set='training', NUM_TASKS=None):
-    # Load datasets
-    challenges, solutions = load_tasks_from_file(task_set=task_sets[task_set])
+def main(task_set='training'):
+    global model_name, llm
+    # Prompt the user to select the model
+    print("Select the model to use:")
+    print("1: GPT-3.5 (gpt-3.5-turbo)")
+    print("2: GPT-4o Mini (gpt-4o-mini)")
+    print("3: GPT-4o (gpt-4o)")
+    print("4: o1 Mini (o1-mini)")
+    print("5: o1 Preview (o1-preview)")
+    print("6: Claude-3.5 Sonnet (claude-3-5-sonnet-20240620)")
+    
+    # Ask user to select the model
+    while True:
+        model_choice = input("Enter the number corresponding to the model (1 to 6): ")
+        if model_choice == "1":
+            model_name = "gpt-3.5-turbo"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "2":
+            model_name = "gpt-4o-mini"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "3":
+            model_name = "gpt-4o"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "4":
+            model_name = "o1-mini"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "5":
+            model_name = "o1-preview"
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        elif model_choice == "6":
+            model_name = "claude-3-5-sonnet-20240620"
+            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0)
+            break
+        else:
+            print("Invalid input. Please enter 1, 2, 3, 4, 5, or 6.")    
+
+    # Generate log file name based on the selected model and timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file_name = os.path.join(log_dir, f"{model_name}_{timestamp}.log")
+
+    # Set up logging
+    logging.basicConfig(
+        level=logging.INFO,  # Set log level
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file_name),  # Log to file
+            logging.StreamHandler()  # Also log to console
+        ]
+    )
+    logger = logging.getLogger(__name__)        
 
     # Ask the user for the number of tasks they want to run
     while True:
@@ -258,11 +290,14 @@ def main(task_set='training', NUM_TASKS=None):
         except ValueError:
             logger.error("Invalid input. Please enter a numerical value or 'all'.")
 
+    # Load datasets
+    challenges, solutions = load_tasks_from_file(task_set=task_sets[task_set])        
+
     # Run the model
-    test_results = run_model(challenges, solutions, NUM_TASKS=NUM_TASKS)
+    test_results = run_model(challenges, solutions, logger, NUM_TASKS=NUM_TASKS)
 
     # Score the results
-    score_result = score_results(results=test_results, solutions=solutions)
+    score_result = score_results(results=test_results, solutions=solutions, logger=logger)
 
     logger.info(f"Model name: {model_name}, Model temperature: {llm.temperature}")
     logger.info(f"Final score: {score_result['total_score']} of {score_result['total_tasks_scored']} "
@@ -271,3 +306,4 @@ def main(task_set='training', NUM_TASKS=None):
 # Start the program
 if __name__ == "__main__":
     main(task_set='training')
+
