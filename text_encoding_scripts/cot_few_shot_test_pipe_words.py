@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import logging
 from datetime import datetime
@@ -12,7 +13,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Directory for logging files
-log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/few_shot/numbers_json'
+log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/cot_few_shot/words'
 
 # Directory where tasks are stored
 task_sets = {
@@ -22,7 +23,23 @@ task_sets = {
     }
 }
 
-# Function to load ARC tasks from JSON files
+# Define the mapping between numbers and color words
+number_to_color = {
+    0: 'black',
+    1: 'blue',
+    2: 'red',
+    3: 'green',
+    4: 'yellow',
+    5: 'gray',
+    6: 'magenta',
+    7: 'orange',
+    8: 'cyan',
+    9: 'brown'
+}
+
+# Create the reverse mapping from color words to numbers
+color_to_number = {v: k for k, v in number_to_color.items()}
+
 def load_tasks_from_file(task_set):
     with open(task_set['challenges'], "r") as tasks:
         challenges = json.load(tasks)
@@ -35,108 +52,220 @@ def load_tasks_from_file(task_set):
 # Function to convert a task to a formatted string
 def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: int) -> str:
     json_task = challenge_tasks[task_id]
-    final_output = ""
-
-    train_tasks = json_task['train']
-    test_task = json_task['test']    
 
     final_output = "Training Examples\n"
 
+    train_tasks = json_task['train']
+    test_task = json_task['test']
+
     for i, task in enumerate(train_tasks):
-        final_output += f"Example {i + 1}: Input\n["
-        # Iterate through rows of Input but skip the trailing comma after the last row
-        for j, row in enumerate(task['input']):
-            final_output += f"\n{json.dumps(row)}"
-            if j != len(task['input']) - 1:  # Add comma only if it's not the last row
-                final_output += ","
+        final_output += f"Example {i + 1}: Input\n"
 
-        final_output += "]\n\n"
-        final_output += f"Example {i + 1}: Output\n["
+        # Convert input grid to the new format with color words
+        for row in task['input']:
+            row_str = '|'.join(number_to_color[num] for num in row)
+            final_output += f"{row_str}\n"
 
-        # Iterate through rows of Output, skipping trailing comma after the last row
-        for j, row in enumerate(task['output']):
-            final_output += f"\n{json.dumps(row)}"
-            if j != len(task['output']) - 1:  # Add comma only if it's not the last row
-                final_output += ","
+        final_output += f"\nExample {i + 1}: Output\n"
 
-        final_output += "]\n\n"
+        # Convert output grid to the new format with color words
+        for row in task['output']:
+            row_str = '|'.join(number_to_color[num] for num in row)
+            final_output += f"{row_str}\n"
 
-    final_output += "Test\n["
+        final_output += "\n"
 
-    # Iterate through rows of the test input, adding a comma after each row except the last one
-    for j, row in enumerate(test_task[test_input_index]['input']):
-        final_output += f"\n{json.dumps(row)}"
-        if j != len(test_task[test_input_index]['input']) - 1:  # Add comma only if it's not the last row
-            final_output += ","
-    final_output += "]\n\nYour Response:"        
+    final_output += "Test Input\n"
+
+    # Convert test input grid to the new format with color words
+    for row in test_task[test_input_index]['input']:
+        row_str = '|'.join(number_to_color[num] for num in row)
+        final_output += f"{row_str}\n"
+
+    final_output += "\nYour Response:"
 
     return final_output
 
-# Function to get a prediction for a single ARC task
+def parse_prediction(prediction_string: str) -> List[List[int]]:
+    # Split the string into lines
+    lines = prediction_string.strip().split('\n')
+    prediction = []
+    grid_started = False  # Flag to indicate if grid lines have started
+    for line in lines:
+        if line.lower().startswith('analysis') or not line.strip():
+            # Skip analysis lines or empty lines
+            continue
+        if any(color in line for color in color_to_number):  # Check if the line contains grid-like information
+            grid_started = True
+        if grid_started:
+            # Parse grid-like rows
+            row_colors = line.strip().split('|')
+            row = []
+            for color in row_colors:
+                color = color.strip().lower()
+                if color in color_to_number:
+                    row.append(color_to_number[color])
+                else:
+                    raise ValueError(f"Unknown color '{color}' in prediction.")
+            prediction.append(row)
+    return prediction
+
+def parse_prediction_with_analysis(prediction_string: str) -> Tuple[str, List[List[int]]]:
+    """
+    Parse the prediction string to extract both the analysis of transformation and the final grid prediction.
+
+    Args:
+        prediction_string (str): The response from the LLM.
+
+    Returns:
+        Tuple[str, List[List[int]]]: A tuple where the first element is the analysis text and
+                                     the second element is the parsed grid prediction.
+    """
+    # Split the string into lines
+    lines = prediction_string.strip().split('\n')
+    analysis = ""
+    grid_started = False  # Flag to indicate if grid lines have started
+    prediction = []
+
+    # Indicators for analysis and grid start/end markers
+    analysis_start_marker = "---Analysis Start---"
+    grid_start_marker = "---Output Grid Start---"
+    grid_end_marker = "---Output Grid End---"
+
+    for line in lines:
+        # Remove any extra whitespace
+        line = line.strip()
+        
+        # Check for markers
+        if line == analysis_start_marker:
+            # Analysis marker encountered, begin recording analysis
+            analysis = ""
+            continue
+        elif line == grid_start_marker:
+            # Grid start marker encountered, switch to grid parsing mode
+            grid_started = True
+            continue
+        elif line == grid_end_marker:
+            # Grid end marker encountered, stop grid parsing
+            grid_started = False
+            break
+        elif not grid_started:
+            # If we are still in the analysis section, keep recording analysis
+            analysis += line + "\n"
+        elif grid_started:
+            # We are in grid parsing mode, so parse the grid-like rows
+            row_colors = line.split('|')
+            row = []
+            # Check if each element in the row corresponds to a valid color
+            for color in row_colors:
+                color = color.strip().lower()
+                if color in color_to_number:
+                    row.append(color_to_number[color])
+                else:
+                    # Skip any non-color line that might have been included erroneously
+                    row = []  # Invalidate the row if an unexpected line is encountered
+                    break
+            if row:  # Append only valid rows to the prediction
+                prediction.append(row)
+    
+    return analysis.strip(), prediction
+
+
+
 def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_index) -> List[List]:
+
+    # CoT example to be added at the beginning of each prompt
+    cot_string = """Sample grid tranformation:
+
+Input grid
+
+black, black, black, black, black, black, black, black, black
+black, black, black, black, yellow, black, black, black, black
+black, black, yellow, yellow, black, black, black, black, black
+black, black, yellow, black, black, black, black, black, black
+black, black, black, black, black, black, black, black, black
+black, black, black, black, black, black, black, black, black
+black, black, black, black, black, yellow, black, black, black
+black, black, black, black, black, yellow, yellow, yellow, black
+black, black, black, black, black, black, yellow, black, black
+
+
+Output grid
+
+black, black, black, black, black, black, black, black, black
+black, black, orange, orange, yellow, black, black, black, black
+black, black, yellow, yellow, orange, black, black, black, black 
+black, black, yellow, orange, orange, black, black, black, black
+black, black, black, black, black, black, black, black, black
+black, black, black, black, black, black, black, black, black
+black, black, black, black, black, yellow, orange, orange, black 
+black, black, black, black, black, yellow, yellow, yellow, black 
+black, black, black, black, black, orange, yellow, orange, black
+
+
+Analysis of transformation: Add orange colored cells in locations adjacent to yellow colored cells so that together they form three by three squares.
+End of sample. 
+
+Beginning of your task:
+"""
 
     # Get the string representation of the task
     task_string = json_task_to_string(challenge_tasks, task_id, test_input_index)
 
+    # Combine the CoT example and task string into the prompt
+    context_prompt = cot_string + "\n" + task_string
+
     # Prompt template 1
     prompt = PromptTemplate(
-        template="You are a chatbot with human-like reasoning and abstraction capabilities. "
-                 "We will engage in tasks that require reasoning and logic. "
-                 "Each task will demonstrate a transformation from an input to an output grid. "
-                 "For each task, you will receive a few examples that demonstate the transformation from input to output. "
-                 "After the examples you'll receive a new input grid called Test. "                
-                 "Your task is to determine the corresponding output grid from the transformation you are able to infer from the examples. "
-                 "Use the same format as the one provided in the examples for your answer. "
-                 "Do not give any justification for your answer, just provide the output grid. "
-                 "\n\n{task_string}\n",
-        input_variables=["task_string"]
+        template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
+                 "We will engage in tasks that require reasoning and logic.\n"
+                 "You will be presented with grids of colored cells. Black color representes the background and the other colors represent objects on the grid.\n"
+                 "Follow these steps:\n"
+                 "1. You will first receive a sample grid transformation where the input and output grids are shown as well as an analysis of the transformation.\n"
+                 "2. You will then be presented with a novel task.\n"
+                 "3. Carefully analyze each input-output example in the task and identify the transformation.\n"
+                 "4. Describe the transformation step-by-step.\n"
+                 "5. Use the marker '---Analysis Start---' before providing your analysis of the transformation.\n"                
+                 "6. Apply the identified transformation to the Test input grid to generate the output grid.\n"
+                 "7. Use the marker '---Output Grid Start---' before providing the final output grid.\n"
+                 "8. Use the same format as the one provided in the examples for your output grid.\n"
+                 "9. Use the marker '---Output Grid End---' at the end of the final output grid.\n"
+                 "\n\n{context_prompt}\n",
+        input_variables=["context_prompt"]
     )
 
     # Generate the full prompt
-    formatted_prompt = prompt.format(task_string=task_string)
+    formatted_prompt = prompt.format(context_prompt=context_prompt)
 
     # Log the prompt
     logger.info(f"Prompt:\n{formatted_prompt}")
-    
+
     # Call the model and get the prediction
     response = llm.invoke(formatted_prompt)
-
-    # Log the raw LLM response for debugging
-    #ogger.info(f"Raw LLM Response: {response.content}")
 
     # Check if the response content is empty
     if not response.content.strip():
         logger.error(f"Empty response received from LLM for Task ID {task_id}, Test Input Index {test_input_index}")
         return []  # Return an empty list if the response is empty
-
-    # Extract the actual prediction from the response content
-    prediction_string = response.content
     
-    # If needed clean the response to remove trailing commas
-    # cleaned_prediction_string = re.sub(r",\s*([\]\}])", r"\1", prediction_string)
-
-    # Parse the string as JSON
-    try:
-        prediction = json.loads(prediction_string)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON: {e}")
-        prediction = []  # Assign an empty list if parsing fails
-
-    # Let's find the shape of our prediction
-    num_rows = len(prediction)
-    num_cols = len(prediction[0]) if num_rows > 0 else 0
-    # Log the prediction and the grid size
-    logger.info(f"   *** Prediction for Task ID {task_id}, Test Input Index {test_input_index}")
-    logger.info(f"       Grid Size: {num_rows}x{num_cols}\n{prediction_string}\n")    
-
-    # Also log the correct solution
+    # Log the raw LLM response for debugging
+    logger.info(f"Raw LLM Response: {response.content}")
+    
+     # Extract the actual prediction and analysis from the response content
+    analysis, prediction = parse_prediction_with_analysis(response.content)
+    
+    # Log the analysis of transformation separately
+    logger.info(f"Analysis of transformations for Task ID {task_id}, Test Input Index {test_input_index}:\n{analysis}\n")
+    
+    # Also log the correct solution
     correct_solution = solutions[task_id][test_input_index]  # Get the correct solution
-    solution_string = "\n".join([str(row) for row in correct_solution])  # Format the solution as a string
-    logger.info(f"   *** Solution\n{solution_string}\n")
+    # Convert the correct solution to the new format for logging
+    solution_lines = ['|'.join(number_to_color[num] for num in row) for row in correct_solution]
+    solution_string = '\n'.join(solution_lines)
+    logger.info(f"Solution:\n{solution_string}\n")
 
     return prediction
 
-# Function to run the model on ARC tasks
 def run_model(challenges, solutions, logger, NUM_ATTEMPTS=1, RETRY_ATTEMPTS=3, NUM_TASKS=None):
 
     # A dict to hold the results returned after all predictions are made
@@ -189,7 +318,6 @@ def run_model(challenges, solutions, logger, NUM_ATTEMPTS=1, RETRY_ATTEMPTS=3, N
 
     return results
 
-# Function to score the results of the ARC tasks
 def score_results(results, solutions, logger) -> Tuple[float, int]:
     total_score = 0
     total_tasks = 0
@@ -227,7 +355,6 @@ def score_results(results, solutions, logger) -> Tuple[float, int]:
         'total_tasks_scored': total_tasks
     }
 
-# Main function that prompts for model and runs the tasks
 def main(task_set='training'):
     global model_name, llm
     # Prompt the user to select the model

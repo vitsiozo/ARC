@@ -1,0 +1,87 @@
+    # CoT example to be added at the beginning of each prompt
+    cot_string = """Sample of a grid tranformation task with solution:
+
+Training Examples
+Example 1: Input
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["yellow", "black", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "yellow", "black", "yellow", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"]
+]
+
+Example 1: Output
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["yellow", "orange", "yellow", "black", "black", "black", "black", "black", "black"], 
+["orange", "orange", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "orange", "black"], 
+["black", "black", "black", "black", "black", "orange", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "yellow", "orange", "yellow", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"]
+]
+
+Example 2: Input
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "black", "yellow", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "yellow", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"]
+]
+
+Example 2: Output
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["orange", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "orange", "yellow", "orange", "black"], 
+["black", "black", "black", "black", "black", "orange", "yellow", "orange", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"]
+]
+
+Test 
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "yellow", "black", "black", "black", "black"], 
+["black", "black", "yellow", "yellow", "black", "black", "black", "black", "black"], 
+["black", "black", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "black", "yellow", "black", "black"]
+]
+
+Solution
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "orange", "orange", "yellow", "black", "black", "black", "black"], 
+["black", "black", "yellow", "yellow", "orange", "black", "black", "black", "black"], 
+["black", "black", "yellow", "orange", "orange", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "orange", "orange", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "orange", "yellow", "orange", "black"]
+]
+
+Transformation logic: Add orange colored cells to the yellow colored cells so that they form perfect squares in the grid.
+End of sample. 
+
+Beginning of your task:
+"""

@@ -13,17 +13,33 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Directory for logging files
-log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/words_plain'
+log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/cot_few_shot/words'
 
 # Directory where tasks are stored
 task_sets = {
     'training': {
-        'challenges': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_word_in_quotes_challenges.json',
-        'solutions': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_word_in_quotes_solutions.json',
+        'challenges': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_challenges.json',
+        'solutions': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_solutions.json',
     }
 }
 
-# Function to load ARC tasks from JSON files
+# Define the mapping between numbers and color words
+number_to_color = {
+    0: 'black',
+    1: 'blue',
+    2: 'red',
+    3: 'green',
+    4: 'yellow',
+    5: 'gray',
+    6: 'magenta',
+    7: 'orange',
+    8: 'cyan',
+    9: 'brown'
+}
+
+# Create the reverse mapping from color words to numbers
+color_to_number = {v: k for k, v in number_to_color.items()}
+
 def load_tasks_from_file(task_set):
     with open(task_set['challenges'], "r") as tasks:
         challenges = json.load(tasks)
@@ -36,71 +52,119 @@ def load_tasks_from_file(task_set):
 # Function to convert a task to a formatted string
 def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: int) -> str:
     json_task = challenge_tasks[task_id]
-    final_output = ""
+
+    final_output = "Training Examples\n"
 
     train_tasks = json_task['train']
     test_task = json_task['test']
 
-    final_output = "Training Examples\n"
-
     for i, task in enumerate(train_tasks):
-        final_output += f"Example {i + 1}: Input\n["
-        # Iterate through rows of Input but skip the trailing comma after the last row
-        for j, row in enumerate(task['input']):
-            final_output += f"\n{json.dumps(row)}"
-            if j != len(task['input']) - 1:  # Add comma only if it's not the last row
-                final_output += ","
+        final_output += f"Example {i + 1}: Input\n"
 
-        final_output += "]\n\n"
-        final_output += f"Example {i + 1}: Output\n["
+        # Convert input grid to the new format with color words
+        for row in task['input']:
+            row_str = ','.join(number_to_color[num] for num in row)
+            final_output += f"{row_str}\n"
 
-        # Iterate through rows of Output, skipping trailing comma after the last row
-        for j, row in enumerate(task['output']):
-            final_output += f"\n{json.dumps(row)}"
-            if j != len(task['output']) - 1:  # Add comma only if it's not the last row
-                final_output += ","
+        final_output += f"\nExample {i + 1}: Output\n"
 
-        final_output += "]\n\n"
+        # Convert output grid to the new format with color words
+        for row in task['output']:
+            row_str = ','.join(number_to_color[num] for num in row)
+            final_output += f"{row_str}\n"
 
-    final_output += "Test\n["
-    for j, row in enumerate(test_task[test_input_index]['input']):
-        final_output += f"\n{json.dumps(row)}"
-        if j != len(test_task[test_input_index]['input']) - 1:  # Add comma only if it's not the last row
-            final_output += ","
-    final_output += "]\n\nYour Response:"
+        final_output += "\n"
+
+    final_output += "Test Input\n"
+
+    # Convert test input grid to the new format with color words
+    for row in test_task[test_input_index]['input']:
+        row_str = ','.join(number_to_color[num] for num in row)
+        final_output += f"{row_str}\n"
+
+    final_output += "\nYour Response:"
 
     return final_output
 
-def sanitize_response(response_content: str) -> str:
-    # Remove any markdown-style code blocks like ```json and ```
-    sanitized_response = re.sub(r'```json|```', '', response_content).strip()
-    return sanitized_response
+def parse_prediction(prediction_string: str) -> List[List[int]]:
+    # Split the string into lines
+    lines = prediction_string.strip().split('\n')
+    prediction = []
+    for line in lines:
+        if line.strip() == '':
+            continue  # Skip empty lines
+        row_colors = line.strip().split(',')
+        row = []
+        for color in row_colors:
+            color = color.strip().lower()
+            if color in color_to_number:
+                row.append(color_to_number[color])
+            else:
+                # Handle unknown color
+                raise ValueError(f"Unknown color '{color}' in prediction.")
+        prediction.append(row)
+    return prediction
 
 def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_index) -> List[List]:
+
+    # CoT example to be added at the beginning of each prompt
+    cot_string = """Sample grid tranformation:
+
+Input grid
+
+black, black, black, black, black, black, black, black, black
+black, black, black, black, yellow, black, black, black, black
+black, black, yellow, yellow, black, black, black, black, black
+black, black, yellow, black, black, black, black, black, black
+black, black, black, black, black, black, black, black, black
+black, black, black, black, black, black, black, black, black
+black, black, black, black, black, yellow, black, black, black
+black, black, black, black, black, yellow, yellow, yellow, black
+black, black, black, black, black, black, yellow, black, black
+
+
+Output grid
+
+black, black, black, black, black, black, black, black, black
+black, black, orange, orange, yellow, black, black, black, black
+black, black, yellow, yellow, orange, black, black, black, black 
+black, black, yellow, orange, orange, black, black, black, black
+black, black, black, black, black, black, black, black, black
+black, black, black, black, black, black, black, black, black
+black, black, black, black, black, yellow, orange, orange, black 
+black, black, black, black, black, yellow, yellow, yellow, black 
+black, black, black, black, black, orange, yellow, orange, black
+
+
+Transformation applied: Add orange colored cells in locations adjacent to yellow colored cells so that together they form three by three squares.
+End of sample. 
+
+Beginning of your task:
+"""
 
     # Get the string representation of the task
     task_string = json_task_to_string(challenge_tasks, task_id, test_input_index)
 
+    # Combine the CoT example and task string into the prompt
+    context_prompt = cot_string + "\n" + task_string
+
     # Prompt template 1
     prompt = PromptTemplate(
         template="You are a chatbot with human-like reasoning and abstraction capabilities. "
-                 "We will engage in tasks that require reasoning and logic. "
-                 "Each task will demonstrate a transformation from an input to an output grid. "
-                 "For each task, you will receive a few examples that demonstate the transformation from input to output. "
-                 "After the examples you'll receive a new input grid called Test. "                
-                 "Your task is to determine the corresponding output grid from the transformation you are able to infer from the examples. "
-                 "Use the same format as the one provided in the examples for your answer. "
-                 "Do not give any justification for your answer, just provide the output grid. "
-                 "\n\n{task_string}\n",
-        input_variables=["task_string"]
+                 "Your goal is to find the transformation that is required to convert an input grid to an output grid based on a few examples. "
+                 "You will first be shown a sample transformation. "
+                 "Then you will be presented with a novel task. "
+                 "Your answer should consist only of the output grid in the same format used in the examples. "
+                 "\n\n{context_prompt}\n",
+        input_variables=["context_prompt"]
     )
 
-      # Generate the full prompt
-    formatted_prompt = prompt.format(task_string=task_string)
-
+    # Generate the full prompt
+    formatted_prompt = prompt.format(context_prompt=context_prompt)
+    
     # Log the prompt
     logger.info(f"Prompt:\n{formatted_prompt}")
-    
+
     # Call the model and get the prediction
     response = llm.invoke(formatted_prompt)
 
@@ -112,24 +176,25 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
         logger.error(f"Empty response received from LLM for Task ID {task_id}, Test Input Index {test_input_index}")
         return []  # Return an empty list if the response is empty
 
-    # Sanitize the response content to remove markdown-style code blocks
-    prediction_string = sanitize_response(response.content)
+    # Extract the actual prediction from the response content
+    prediction_string = response.content
 
-    # Parse the response into a grid (list of lists)
+    # Parse the prediction string into a list of lists of integers
     try:
-        prediction = json.loads(prediction_string)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse JSON: {e}")
+        prediction = parse_prediction(prediction_string)
+    except Exception as e:
+        logger.error(f"Failed to parse prediction: {e}")
         prediction = []  # Assign an empty list if parsing fails
 
-    # Log the prediction and grid size
-    logger.info(f"Prediction for Task ID {task_id}, Test Input Index {test_input_index}: {prediction}")
+    # Log the prediction
+    logger.info(f"Prediction:\n{prediction_string}\n")
 
-    # Get the correct solution
-    correct_solution = solutions[task_id][test_input_index]
-
-    # Log the correct solution
-    logger.info(f"Solution: {correct_solution}")
+    # Also log the correct solution
+    correct_solution = solutions[task_id][test_input_index]  # Get the correct solution
+    # Convert the correct solution to the new format for logging
+    solution_lines = [','.join(number_to_color[num] for num in row) for row in correct_solution]
+    solution_string = '\n'.join(solution_lines)
+    logger.info(f"Solution:\n{solution_string}\n")
 
     return prediction
 
@@ -189,34 +254,38 @@ def score_results(results, solutions, logger) -> Tuple[float, int]:
     total_score = 0
     total_tasks = 0
 
+    # Loop through each task in your results to grade it
     for task_id, task_attempts in results.items():
         total_tasks += 1
         task_score = 0
         num_pairs = len(task_attempts)
 
+        # Go through each task. Most will only have 1 pair.
         for pair_index, pair_attempts in enumerate(task_attempts):
             logger.info(f"Scoring Task {task_id} pair #{pair_index+1}")
             pair_correct = False
 
-            # Compare the attempt with the reference solution (both are grids of color names)
+            # Look at both of your attempts
             for attempt_key, attempt in pair_attempts.items():
+
+                # If the attempt matches the solution, then it's correct
                 if attempt == solutions[task_id][pair_index]:
                     logger.info(f"Task Id {task_id} pair {pair_index+1} {attempt_key} matches solution")
                     pair_correct = True
-                    break
+                    break # If it is correct, log it and break the loop
 
             if pair_correct:
                 task_score += 1
 
         task_score /= num_pairs
         total_score += task_score
+        #print(f"Score for Task {task_id}: {task_score}")  # Debug: print each task score
 
     logger.info(f"Total score: {total_score}, Total tasks scored: {total_tasks}")
     return {
         'total_score': total_score,
         'total_tasks_scored': total_tasks
     }
-
 
 def main(task_set='training'):
     global model_name, llm
@@ -306,4 +375,3 @@ def main(task_set='training'):
 # Start the program
 if __name__ == "__main__":
     main(task_set='training')
-

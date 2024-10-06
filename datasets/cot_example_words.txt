@@ -1,0 +1,78 @@
+Training Examples
+Example 1: Input
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["yellow", "black", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "yellow", "black", "yellow", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"]
+]
+
+Example 1: Output
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["yellow", "orange", "yellow", "black", "black", "black", "black", "black", "black"], 
+["orange", "orange", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "orange", "black"], 
+["black", "black", "black", "black", "black", "orange", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "yellow", "orange", "yellow", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"]
+]
+
+Example 2: Input
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "black", "yellow", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "yellow", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"]
+]
+
+Example 2: Output
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["orange", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["yellow", "yellow", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "orange", "yellow", "orange", "black"], 
+["black", "black", "black", "black", "black", "orange", "yellow", "orange", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"]
+]
+
+Test 
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "yellow", "black", "black", "black", "black"], 
+["black", "black", "yellow", "yellow", "black", "black", "black", "black", "black"], 
+["black", "black", "yellow", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "black", "yellow", "black", "black"]
+]
+
+Solution
+[
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "orange", "orange", "yellow", "black", "black", "black", "black"], 
+["black", "black", "yellow", "yellow", "orange", "black", "black", "black", "black"], 
+["black", "black", "yellow", "orange", "orange", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "black", "black", "black", "black"], 
+["black", "black", "black", "black", "black", "yellow", "orange", "orange", "black"], 
+["black", "black", "black", "black", "black", "yellow", "yellow", "yellow", "black"], 
+["black", "black", "black", "black", "black", "orange", "yellow", "orange", "black"]
+]
