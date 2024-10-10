@@ -93,7 +93,7 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
         template="You are a chatbot with human-like reasoning and abstraction capabilities. "
                  "We will engage in tasks that require reasoning and logic. "
                  "Each task will demonstrate a transformation from an input to an output grid. "
-                 "For each task, you will receive a few examples that demonstate the transformation from input to output. "
+                 "For each task, you will receive a few examples that demonstrate the transformation from input to output. "
                  "After the examples you'll receive a new input grid called Test. "                
                  "Your task is to determine the corresponding output grid from the transformation you are able to infer from the examples. "
                  "Use the same format as the one provided in the examples for your answer. "

@@ -146,7 +146,7 @@ Output grid
 [0, 0, 0, 0, 0, 7, 4, 7, 0]
 ]
 
-Transformation applied: Add number 7 cells in locations adjacent to number 4 cells so that together they form three by three squares.
+Transformation applied: Add number 7 cells in empty locations adjacent to number 4 cells so that together they form three by three objects.
 End of sample. 
 
 Beginning of your task:
@@ -162,13 +162,14 @@ Beginning of your task:
     prompt = PromptTemplate(
         template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
                  "We will engage in tasks that require reasoning and logic.\n"
-                 "You will be presented with grids of cells that contain numbers.\n"
-                 "Number 0 represents an empty cell. The other numbers represent objects or formations on the grid\n"
-                 "You will be shown a sample tranformation. Then you will be presented with a novel task. Follow these steps:\n"
+                 "You will be presented with grids made up of numbers.\n"
+                 "Number 0 represents empty cells and the other numbers represent objects or patterns on the grid.\n"
+                 "First you will be shown a sample tranformation together with the reasoning behind the transformation.\n"
+                 "Then you will be presented with a novel task. Follow these steps:\n"
                  "1. Carefully analyze each input-output example in the task and identify the transformation.\n"
                  "2. Describe the transformation step by step.\n"
-                 "3. Use the marker '---Analysis Start---' before providing your analysis of the transformation.\n"                
-                 "4. Apply the identified transformation to the Test input grid to generate the output grid.\n"
+                 "3. Apply the identified transformation to the Test input grid to generate the output grid.\n"
+                 "4. Use the marker '---Analysis Start---' before providing your analysis of the transformation.\n"                
                  "5. Use the marker '---Output Grid Start---' before providing the final output grid.\n"
                  "6. Use the same format as the one provided in the examples for your output grid.\n"
                  "7. Use the marker '---Output Grid End---' at the end of the final output grid.\n"
@@ -340,7 +341,7 @@ def main(task_set='training'):
             break
         elif model_choice == "6":
             model_name = "claude-3-5-sonnet-20240620"
-            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0)
+            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0, top_p=0.1, top_k=10)
             break
         else:
             print("Invalid input. Please enter 1, 2, 3, 4, 5, or 6.")    

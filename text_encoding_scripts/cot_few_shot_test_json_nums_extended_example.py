@@ -1,6 +1,6 @@
 import os
-import re
 import json
+import re
 import logging
 from datetime import datetime
 from typing import List, Tuple
@@ -13,13 +13,13 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Directory for logging files
-log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/few_shot/words_json'
+log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/cot_few_shot/numbers'
 
 # Directory where tasks are stored
 task_sets = {
     'training': {
-        'challenges': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_word_in_quotes_challenges.json',
-        'solutions': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_word_in_quotes_solutions.json',
+        'challenges': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_challenges.json',
+        'solutions': '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/datasets/50_solutions.json',
     }
 }
 
@@ -39,7 +39,7 @@ def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: i
     final_output = ""
 
     train_tasks = json_task['train']
-    test_task = json_task['test']
+    test_task = json_task['test']    
 
     final_output = "Training Examples\n"
 
@@ -63,35 +63,174 @@ def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: i
         final_output += "]\n\n"
 
     final_output += "Test\n["
+
+    # Iterate through rows of the test input, adding a comma after each row except the last one
     for j, row in enumerate(test_task[test_input_index]['input']):
         final_output += f"\n{json.dumps(row)}"
         if j != len(test_task[test_input_index]['input']) - 1:  # Add comma only if it's not the last row
             final_output += ","
-    final_output += "]\n\nYour Response:"
+    final_output += "]\n\nYour Response:"        
 
     return final_output
 
+def parse_prediction_with_analysis_json(prediction_string: str) -> Tuple[str, List[List[int]]]:
+    """
+    Parse the prediction string to extract both the analysis of transformation and the final grid prediction in JSON format.
+
+    Args:
+        prediction_string (str): The response from the LLM.
+
+    Returns:
+        Tuple[str, List[List[int]]]: A tuple where the first element is the analysis text and
+                                     the second element is the parsed JSON grid prediction.
+    """
+    # Define markers for segmentation
+    analysis_start_marker = "---Analysis Start---"
+    grid_start_marker = "---Output Grid Start---"
+    grid_end_marker = "---Output Grid End---"
+
+    # Initialize analysis and prediction as empty
+    analysis = ""
+    prediction = []
+
+    # Use regex to locate the markers and segment the content
+    try:
+        # Extract analysis
+        analysis_match = re.search(rf"{analysis_start_marker}(.*?){grid_start_marker}", prediction_string, re.DOTALL)
+        if analysis_match:
+            analysis = analysis_match.group(1).strip()
+
+        # Extract grid in JSON format
+        grid_match = re.search(rf"{grid_start_marker}(.*?){grid_end_marker}", prediction_string, re.DOTALL)
+        if grid_match:
+            grid_json_string = grid_match.group(1).strip()
+            # Parse the grid JSON into a list of lists
+            prediction = json.loads(grid_json_string)
+
+    except (json.JSONDecodeError, AttributeError) as e:
+        logging.error(f"Failed to parse prediction: {e}")
+    
+    return analysis, prediction
+
+# Function to get a prediction for a single ARC task
 def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_index) -> List[List]:
+
+      # CoT example to be added at the beginning of each prompt
+    cot_string = """Sample grid tranformation:
+
+Training Examples
+Example 1: Input
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[4, 0, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 0, 0], 
+[0, 0, 0, 0, 0, 0, 4, 4, 0], 
+[0, 0, 0, 0, 0, 4, 0, 4, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0]
+]
+
+Example 1: Output
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[4, 7, 4, 0, 0, 0, 0, 0, 0], 
+[7, 7, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 7, 0], 
+[0, 0, 0, 0, 0, 7, 4, 4, 0], 
+[0, 0, 0, 0, 0, 4, 7, 4, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0]
+]
+
+Example 2: Input
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[0, 4, 4, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 4, 0], 
+[0, 0, 0, 0, 0, 0, 4, 0, 0], 
+[0, 0, 0, 0, 0, 0, 4, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0]
+]
+
+Example 2: Output
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[7, 4, 4, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 4, 0], 
+[0, 0, 0, 0, 0, 7, 4, 7, 0], 
+[0, 0, 0, 0, 0, 7, 4, 7, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0]
+]
+
+Test grid
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 4, 0, 0, 0, 0], 
+[0, 0, 4, 4, 0, 0, 0, 0, 0], 
+[0, 0, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 4, 0], 
+[0, 0, 0, 0, 0, 0, 4, 0, 0]
+]
+
+Output grid
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 7, 7, 4, 0, 0, 0, 0], 
+[0, 0, 4, 4, 7, 0, 0, 0, 0], 
+[0, 0, 4, 7, 7, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 7, 7, 0], 
+[0, 0, 0, 0, 0, 4, 4, 4, 0], 
+[0, 0, 0, 0, 0, 7, 4, 7, 0]
+]
+
+
+Transformation applied: Add number 7 cells in empty locations adjacent to number 4 cells so that together they form three by three objects.
+End of sample. 
+
+Beginning of your task:
+"""
 
     # Get the string representation of the task
     task_string = json_task_to_string(challenge_tasks, task_id, test_input_index)
 
-    # Prompt template 1
+    # Combine the CoT example and task string into the prompt
+    context_prompt = cot_string + "\n" + task_string
+
+   # Prompt template 1
     prompt = PromptTemplate(
         template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
                  "We will engage in tasks that require reasoning and logic.\n"
-                 "You will be presented with grids of colored cells. Black color represents the background and the other colors represent objects or patterns on the grid.\n"
-                 "For each task, you will receive a few examples that demonstrate the transformation from an input to an output grid.\n"
-                 "After the examples you'll receive a new input grid called Test.\n"                
-                 "Your task is to determine the corresponding output grid from the transformation you can infer from the examples.\n"
-                 "Use the same format as the one provided in the examples for your answer.\n"
-                 "Do not give any justification for your answer, just provide the output grid.\n"
-                 "\n\n{task_string}\n",
-        input_variables=["task_string"]
+                 "You will be presented with grids made up of numbers.\n"
+                 "Number 0 represents empty cells and the other numbers represent objects or patterns on the grid.\n"
+                 "First you will be shown an example task together with the identified transformation.\n"
+                 "Then you will be presented with a novel task. Follow these steps:\n"
+                 "1. Carefully analyze each input-output example in the task and identify the transformation.\n"
+                 "2. Describe the transformation step by step.\n"
+                 "3. Apply the identified transformation to the Test input grid to generate the output grid.\n"
+                 "4. Use the marker '---Analysis Start---' before providing your analysis of the transformation.\n"                
+                 "5. Use the marker '---Output Grid Start---' before providing the final output grid.\n"
+                 "6. Use the same format as the one provided in the examples for your output grid.\n"
+                 "7. Use the marker '---Output Grid End---' at the end of the final output grid.\n"
+                 "\n\n{context_prompt}\n",
+        input_variables=["context_prompt"]
     )
 
-      # Generate the full prompt
-    formatted_prompt = prompt.format(task_string=task_string)
+    # Generate the full prompt
+    formatted_prompt = prompt.format(context_prompt=context_prompt)
 
     # Log the prompt
     logger.info(f"Prompt:\n{formatted_prompt}")
@@ -99,16 +238,19 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
     # Call the model and get the prediction
     response = llm.invoke(formatted_prompt)
 
-    # Log the raw LLM response for debugging
-    #logger.info(f"Raw LLM Response: {response.content}")
-
     # Check if the response content is empty
     if not response.content.strip():
         logger.error(f"Empty response received from LLM for Task ID {task_id}, Test Input Index {test_input_index}")
         return []  # Return an empty list if the response is empty
     
-    # Parse the response content
-    prediction = json.loads(response.content)
+    # Log the raw LLM response for debugging
+    #logger.info(f"Raw LLM Response: {response.content}")
+
+    # Parse the response to extract analysis and JSON grid
+    analysis, prediction = parse_prediction_with_analysis_json(response.content)
+
+    # Log the analysis of transformation separately
+    logger.info(f"Analysis of transformations for Task ID {task_id}, Test Input Index {test_input_index}:\n{analysis}\n")
 
     # Format the prediction for readability
     formatted_prediction = "[\n" + ",\n".join(json.dumps(row) for row in prediction) + "\n]"
@@ -116,17 +258,14 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
     # Log the formatted prediction
     logger.info(f"Prediction for Task ID {task_id}, Test Input Index {test_input_index}:\n{formatted_prediction}")
 
-    # Get the correct solution
+    # Also log the correct solution
     correct_solution = solutions[task_id][test_input_index]
-
-    # Format the correct solution for readability
     formatted_solution = "[\n" + ",\n".join(json.dumps(row) for row in correct_solution) + "\n]"
-    
-    # Log the correct solution
-    logger.info(f"Solution: {formatted_solution}")
+    logger.info(f"Solution:\n{formatted_solution}")
 
     return prediction
 
+# Function to run the model on ARC tasks
 def run_model(challenges, solutions, logger, NUM_ATTEMPTS=1, RETRY_ATTEMPTS=3, NUM_TASKS=None):
 
     # A dict to hold the results returned after all predictions are made
@@ -179,31 +318,37 @@ def run_model(challenges, solutions, logger, NUM_ATTEMPTS=1, RETRY_ATTEMPTS=3, N
 
     return results
 
+# Function to score the results of the ARC tasks
 def score_results(results, solutions, logger) -> Tuple[float, int]:
     total_score = 0
     total_tasks = 0
 
+    # Loop through each task in your results to grade it
     for task_id, task_attempts in results.items():
         total_tasks += 1
         task_score = 0
         num_pairs = len(task_attempts)
 
+        # Go through each task. Most will only have 1 pair.
         for pair_index, pair_attempts in enumerate(task_attempts):
             logger.info(f"Scoring Task {task_id} pair #{pair_index+1}")
             pair_correct = False
 
-            # Compare the attempt with the reference solution (both are grids of color names)
+            # Look at both of your attempts
             for attempt_key, attempt in pair_attempts.items():
+
+                # If the attempt matches the solution, then it's correct
                 if attempt == solutions[task_id][pair_index]:
                     logger.info(f"Task Id {task_id} pair {pair_index+1} {attempt_key} matches solution")
                     pair_correct = True
-                    break
+                    break # If it is correct, log it and break the loop
 
             if pair_correct:
                 task_score += 1
 
         task_score /= num_pairs
         total_score += task_score
+        #print(f"Score for Task {task_id}: {task_score}")  # Debug: print each task score
 
     logger.info(f"Total score: {total_score}, Total tasks scored: {total_tasks}")
     return {
@@ -211,7 +356,7 @@ def score_results(results, solutions, logger) -> Tuple[float, int]:
         'total_tasks_scored': total_tasks
     }
 
-
+# Main function that prompts for model and runs the tasks
 def main(task_set='training'):
     global model_name, llm
     # Prompt the user to select the model
@@ -248,7 +393,7 @@ def main(task_set='training'):
             break
         elif model_choice == "6":
             model_name = "claude-3-5-sonnet-20240620"
-            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0, top_p=0.1, top_k=10 )
+            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0, top_p=0.1, top_k=10)
             break
         else:
             print("Invalid input. Please enter 1, 2, 3, 4, 5, or 6.")    
@@ -300,4 +445,3 @@ def main(task_set='training'):
 # Start the program
 if __name__ == "__main__":
     main(task_set='training')
-
