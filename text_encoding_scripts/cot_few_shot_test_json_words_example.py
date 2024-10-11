@@ -144,7 +144,7 @@ Output grid
 ["black", "black", "black", "black", "black", "orange", "yellow", "orange", "black"]
 ]
 
-Transformation applied: Add orange cells in locations adjacent to yellow cells so that together they form three by three squares.
+Transformation applied: Add orange cells in locations adjacent to yellow cells so that together they form objects of size three by three.
 End of sample. 
 
 Beginning of your task:
@@ -161,8 +161,8 @@ Beginning of your task:
         template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
                  "We will engage in tasks that require reasoning and logic.\n"
                  "You will be presented with grids of colored cells.\n"
-                 "Black color representes the background and the other colors represent objects or patterns on the grid.\n"
-                 "First you will be shown an example task together with the identified transformation.\n"
+                 "Black color represents the background and the other colors represent objects or patterns on the grid.\n"
+                 "First you will be shown an example Input and Output grid together with the identified transformation.\n"
                  "Then you will be presented with a novel task. Follow these steps:\n"
                  "1. Carefully analyze each input-output example in the task and identify the transformation.\n"
                  "2. Describe the transformation step by step.\n"

@@ -121,7 +121,7 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
         template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
                  "We will engage in tasks that require reasoning and logic.\n"
                  "You will be presented with grids of colored cells.\n"
-                 "Black color representes the background and the other colors represent objects or patterns on the grid.\n"
+                 "Black color represents the background and the other colors represent objects or patterns on the grid.\n"
                  "Follow these steps:\n"
                  "1. Carefully analyze each input-output example in the task and identify the transformation.\n"
                  "2. Describe the transformation step by step.\n"

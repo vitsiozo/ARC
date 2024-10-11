@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import logging
 from datetime import datetime
 from typing import List, Tuple
@@ -12,7 +13,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
 
 # Directory for logging files
-log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/few_shot/numbers_plain'
+log_dir = '/Users/vitsiozo/Desktop/MSc AI/Modules/Project/ARC/log_txt_output/cot_few_shot/numbers'
 
 # Directory where tasks are stored
 task_sets = {
@@ -35,108 +36,335 @@ def load_tasks_from_file(task_set):
 # Function to convert a task to a formatted string
 def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: int) -> str:
     json_task = challenge_tasks[task_id]
+    final_output = ""
+
+    train_tasks = json_task['train']
+    test_task = json_task['test']    
 
     final_output = "Training Examples\n"
 
-    train_tasks = json_task['train']
-    test_task = json_task['test']
-
     for i, task in enumerate(train_tasks):
-        final_output += f"Example {i + 1}: Input\n"
+        final_output += f"Example {i + 1}: Input\n["
+        # Iterate through rows of Input but skip the trailing comma after the last row
+        for j, row in enumerate(task['input']):
+            final_output += f"\n{json.dumps(row)}"
+            if j != len(task['input']) - 1:  # Add comma only if it's not the last row
+                final_output += ","
 
-        # Convert input grid to the new format
-        for row in task['input']:
-            row_str = ''.join(str(num) for num in row)
-            final_output += f"{row_str}\n"
+        final_output += "]\n\n"
+        final_output += f"Example {i + 1}: Output\n["
 
-        final_output += f"\nExample {i + 1}: Output\n"
+        # Iterate through rows of Output, skipping trailing comma after the last row
+        for j, row in enumerate(task['output']):
+            final_output += f"\n{json.dumps(row)}"
+            if j != len(task['output']) - 1:  # Add comma only if it's not the last row
+                final_output += ","
 
-        # Convert output grid to the new format
-        for row in task['output']:
-            row_str = ''.join(str(num) for num in row)
-            final_output += f"{row_str}\n"
+        final_output += "]\n\n"
 
-        final_output += "\n"
+    final_output += "Test\n["
 
-    final_output += "Test Input\n"
-
-    # Convert test input grid to the new format
-    for row in test_task[test_input_index]['input']:
-        row_str = ''.join(str(num) for num in row)
-        final_output += f"{row_str}\n"
-
-    final_output += "\nYour Response:"
+    # Iterate through rows of the test input, adding a comma after each row except the last one
+    for j, row in enumerate(test_task[test_input_index]['input']):
+        final_output += f"\n{json.dumps(row)}"
+        if j != len(test_task[test_input_index]['input']) - 1:  # Add comma only if it's not the last row
+            final_output += ","
+    final_output += "]\n\nYour Response:"        
 
     return final_output
 
-# Function to parse the model's response into a grid format
-def parse_prediction(prediction_string: str) -> List[List[int]]:
-    # Split the string into lines
-    lines = prediction_string.strip().split('\n')
-    # For each line, convert the string of digits into a list of integers
+def parse_prediction_json(prediction_string: str) -> List[List[int]]:
+    """
+    Extract and parse the JSON grid prediction from a response string.
+    
+    This function identifies the first JSON-like structure in the response, ignoring any additional text
+    or formatting, and returns the parsed grid as a list of lists of integers.
+
+    Args:
+        prediction_string (str): The response from the LLM.
+
+    Returns:
+        List[List[int]]: The parsed JSON grid prediction.
+    """
     prediction = []
-    for line in lines:
-        if line.strip() == '':
-            continue  # Skip empty lines
-        row = [int(char) for char in line.strip()]
-        prediction.append(row)
+
+    try:
+        # Step 1: Use a regular expression to extract the first JSON-like structure
+        # This will capture any JSON array (e.g., [ ... ]) in the string
+        json_match = re.search(r"\[\s*\[.*?\]\s*\]", prediction_string, re.DOTALL)
+
+        if json_match:
+            # Step 2: Extract the matched JSON string
+            json_string = json_match.group(0)
+
+            # Step 3: Log the extracted JSON string for debugging
+            logging.info(f"Extracted JSON string: {json_string}")
+
+            # Step 4: Parse the JSON string into a Python list of lists
+            prediction = json.loads(json_string)
+        else:
+            logging.error(f"No JSON structure found in the response: {prediction_string}")
+    except json.JSONDecodeError as e:
+        logging.error(f"Failed to parse JSON from the response: {prediction_string} - Error: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error during JSON parsing: {e}")
+
     return prediction
 
-# Function to get a prediction for a single ARC task
+# Function to get a prediction for a single ARC task with user/system/assistant formatting
 def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_index) -> List[List]:
+    # CoT example to be included at the beginning of each prompt
+    cot_example = """"You are a chatbot with human-like reasoning and abstraction capabilities. We will engage in tasks that require reasoning and logic. You will be presented with grids made up of numbers. Number 0 represents empty cells (background) and the other numbers represent objects or patterns on the grid. First you will be shown 4 example tasks together with the identified transformation. Then you will be presented with a novel task. When presented with a test grid, provide only the output grid in JSON format, without any explanations, comments, or extra characters. 
+Example Tasks start:
+
+Task 1
+
+Example 1: Input
+[
+[0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0],  
+[0, 6, 0, 2, 0],  
+[0, 0, 0, 2, 0],  
+[0, 0, 0, 0, 0]  
+]
+
+Example 1: Output
+[
+[0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0],  
+[0, 6, 6, 2, 0],  
+[0, 0, 0, 2, 0],  
+[0, 0, 0, 0, 0]  
+]
+
+Transformation applied:
+1. Extend size 1 color 6 object towards color 2 object until they touch.
+
+Task 2
+
+Example 1: Input
+[
+[0, 0, 0, 0, 0],  
+[0, 0, 1, 1, 0],  
+[0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0]  
+]
+
+Example 1: Output
+[
+[0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0],  
+[0, 0, 2, 2, 0],  
+[0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0]  
+]
+
+Example 2: Input
+[
+[0, 0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0, 0],  
+[0, 1, 0, 0, 0, 0],  
+[0, 1, 1, 0, 0, 0],  
+[0, 0, 0, 0, 0, 0]  
+]
+
+Example 2: Output
+[
+[0, 0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0, 0],  
+[0, 0, 0, 0, 0, 0],  
+[0, 2, 0, 0, 0, 0],  
+[0, 2, 2, 0, 0, 0]  
+]
+
+Transformation applied:
+
+1. Move color 1 object 1 pixel down  
+2. Recolor color 1 object to color 2
+
+Task 3:
+
+Example 1: Input
+[
+[1, 1, 1],  
+[0, 0, 0],  
+[0, 0, 0]  
+]
+
+Example 1: Output
+[
+[0, 0, 0],  
+[1, 1, 1],  
+[0, 0, 0]  
+]
+
+Example 2: Input
+[
+[0, 0, 0],  
+[1, 1, 1],  
+[0, 0, 0]  
+]
+
+Example 2: Output
+[
+[0, 0, 0],  
+[0, 0, 0],  
+[1, 1, 1]  
+]
+
+Example 3: Input
+[
+[0, 1, 0],  
+[1, 1, 0],  
+[0, 0, 0]  
+]
+
+Example 3: Output
+[
+[0, 0, 0],  
+[0, 1, 0],  
+[1, 1, 0]  
+]
+
+Example 4: Input
+[
+[0, 2, 2],  
+[0, 0, 2],  
+[0, 0, 0]  
+]
+
+Example 4: Output
+[
+[0, 0, 0],  
+[0, 2, 2],  
+[0, 0, 2]  
+]
+
+Transformation applied:  
+1. Move all color objects one pixel down while preserving their shape
+
+Task 4:
+
+Example 1: Input
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[4, 0, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 0, 0], 
+[0, 0, 0, 0, 0, 0, 4, 4, 0], 
+[0, 0, 0, 0, 0, 4, 0, 4, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0]
+]
+
+Example 1: Output
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[4, 7, 4, 0, 0, 0, 0, 0, 0], 
+[7, 7, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 7, 0], 
+[0, 0, 0, 0, 0, 7, 4, 4, 0], 
+[0, 0, 0, 0, 0, 4, 7, 4, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0]
+]
+
+Example 2: Input
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[0, 4, 4, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 4, 0], 
+[0, 0, 0, 0, 0, 0, 4, 0, 0], 
+[0, 0, 0, 0, 0, 0, 4, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0]
+]
+
+Example 2: Output
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[7, 4, 4, 0, 0, 0, 0, 0, 0], 
+[4, 4, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 4, 0], 
+[0, 0, 0, 0, 0, 7, 4, 7, 0], 
+[0, 0, 0, 0, 0, 7, 4, 7, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0]
+]
+
+Example 3: Input
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 4, 0, 0, 0, 0], 
+[0, 0, 4, 4, 0, 0, 0, 0, 0], 
+[0, 0, 4, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 4, 4, 0], 
+[0, 0, 0, 0, 0, 0, 4, 0, 0]
+]
+
+Example 3: Output 
+[
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 7, 7, 4, 0, 0, 0, 0], 
+[0, 0, 4, 4, 7, 0, 0, 0, 0], 
+[0, 0, 4, 7, 7, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 0, 0, 0, 0], 
+[0, 0, 0, 0, 0, 4, 7, 7, 0], 
+[0, 0, 0, 0, 0, 4, 4, 4, 0], 
+[0, 0, 0, 0, 0, 7, 4, 7, 0]
+]
+
+Transformation applied:  
+1. Add number 7 cells in empty locations adjacent to number 4 cells so that together they form three by three objects.
+Example tasks end. 
+"""
 
     # Get the string representation of the task
     task_string = json_task_to_string(challenge_tasks, task_id, test_input_index)
 
-    # Prompt template 1
-    prompt = PromptTemplate(
-        template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
-                 "We will engage in tasks that require reasoning and logic.\n"
-                 "You will be presented with grids made up of numbers.\n"
-                 "Number 0 represents empty cells and the other numbers represent objects or patterns on the grid.\n"
-                 "For each task, you will receive a few examples that demonstrate the transformation from an input to an output grid.\n"
-                 "After the examples you'll receive a new input grid called Test.\n"                
-                 "Your task is to determine the corresponding output grid from the transformation you can infer from the examples.\n"
-                 "Use the same format as the one provided in the examples for your answer.\n"
-                 "Do not give any justification for your answer, just provide the output grid.\n"
-                 "\n\n{task_string}\n",
-        input_variables=["task_string"]
-    )
-
-    # Generate the full prompt
-    formatted_prompt = prompt.format(task_string=task_string)
+    # Construct the role-based format without repeating the `system` and `user` tags unnecessarily
+    role_based_prompt = [
+        {"role": "system", "content": cot_example},
+        {"role": "user", "content": task_string}
+    ]
 
     # Log the prompt
-    logger.info(f"Prompt:\n{formatted_prompt}")
-
-    # Call the model and get the prediction
-    response = llm.invoke(formatted_prompt)
-
-    # Log the raw LLM response for debugging
-    logger.info(f"Raw LLM Response: {response.content}")
+    logger.info(f"Prompt:\n{role_based_prompt}")
+    
+    # Call the model and get the prediction (assuming llm.invoke accepts a list of dicts)
+    response = llm.invoke(role_based_prompt)
 
     # Check if the response content is empty
     if not response.content.strip():
         logger.error(f"Empty response received from LLM for Task ID {task_id}, Test Input Index {test_input_index}")
         return []  # Return an empty list if the response is empty
+    
+    # Log the raw LLM response for debugging
+    logger.info(f"Raw LLM Response: {response.content}")
 
-    # Extract the actual prediction from the response content
-    prediction_string = response.content
+    # Parse the response to extract analysis and JSON grid
+    prediction = parse_prediction_json(response.content)
 
-    # Parse the prediction string into a list of lists of integers
-    try:
-        prediction = parse_prediction(prediction_string)
-    except Exception as e:
-        logger.error(f"Failed to parse prediction: {e}")
-        prediction = []  # Assign an empty list if parsing fails
+    # Format the prediction for readability
+    formatted_prediction = "[\n" + ",\n".join(json.dumps(row) for row in prediction) + "\n]"
 
-    # Log the prediction
-    logger.info(f"Prediction:\n{prediction_string}\n")
+    # Log the formatted prediction
+    logger.info(f"Prediction for Task ID {task_id}, Test Input Index {test_input_index}:\n{formatted_prediction}")
 
     # Also log the correct solution
-    correct_solution = solutions[task_id][test_input_index]  # Get the correct solution
-    solution_string = "\n".join([''.join(map(str, row)) for row in correct_solution])  # Format the solution as a string
-    logger.info(f"Solution:\n{solution_string}\n")
+    correct_solution = solutions[task_id][test_input_index]
+    formatted_solution = "[\n" + ",\n".join(json.dumps(row) for row in correct_solution) + "\n]"
+    logger.info(f"Solution:\n{formatted_solution}")
 
     return prediction
 

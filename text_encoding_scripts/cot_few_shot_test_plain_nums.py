@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import logging
 from datetime import datetime
 from typing import List, Tuple
@@ -69,42 +70,190 @@ def json_task_to_string(challenge_tasks: dict, task_id: str, test_input_index: i
 
     return final_output
 
-# Function to parse the model's response into a grid format
-def parse_prediction(prediction_string: str) -> List[List[int]]:
-    # Split the string into lines
-    lines = prediction_string.strip().split('\n')
-    # For each line, convert the string of digits into a list of integers
+def parse_prediction_with_analysis(prediction_string: str) -> Tuple[str, List[List[int]]]:
+    """
+    Parse the prediction string to extract both the analysis of transformation and the final grid prediction.
+
+    Args:
+        prediction_string (str): The response from the LLM.
+
+    Returns:
+        Tuple[str, List[List[int]]]: A tuple where the first element is the analysis text and
+                                     the second element is the parsed grid as a list of lists of integers.
+    """
+    # Define markers for segmentation
+    analysis_start_marker = "---Analysis Start---"
+    grid_start_marker = "---Output Grid Start---"
+    grid_end_marker = "---Output Grid End---"
+
+    # Initialize analysis and prediction as empty
+    analysis = ""
     prediction = []
-    for line in lines:
-        if line.strip() == '':
-            continue  # Skip empty lines
-        row = [int(char) for char in line.strip()]
-        prediction.append(row)
-    return prediction
+
+    try:
+        # Extract analysis text (everything between '---Analysis Start---' and '---Output Grid Start---')
+        analysis_match = re.search(rf"{analysis_start_marker}(.*?){grid_start_marker}", prediction_string, re.DOTALL)
+        if analysis_match:
+            analysis = analysis_match.group(1).strip()
+
+        # Extract grid (everything between '---Output Grid Start---' and '---Output Grid End---')
+        grid_match = re.search(rf"{grid_start_marker}(.*?){grid_end_marker}", prediction_string, re.DOTALL)
+        if grid_match:
+            # Extract grid text and remove any triple backticks or surrounding whitespace
+            grid_text = grid_match.group(1).strip()
+            grid_text = grid_text.replace("```", "")  # Remove triple backticks if present
+
+            # Split grid into lines
+            grid_lines = grid_text.splitlines()
+
+            # Convert each line to a list of integers, assuming each character is a number
+            for line in grid_lines:
+                row = [int(char) for char in line if char.isdigit()]  # Convert each character to an integer
+                prediction.append(row)
+
+    except (ValueError, AttributeError) as e:
+        logging.error(f"Failed to parse prediction: {e}")
+    
+    return analysis, prediction
 
 # Function to get a prediction for a single ARC task
 def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_index) -> List[List]:
 
+       # CoT example to be added at the beginning of each prompt
+    cot_string = """Example tasks:
+
+Task 1
+
+Example 1: Input 
+00000  
+00000  
+06020  
+00020  
+00000
+
+Example 1: Output
+00000  
+00000  
+06620  
+00020  
+00000
+
+Transformation applied:
+
+1. Extend size 1 color 6 object towards color 2 object until they touch.
+
+Task 2
+
+Example 1: Input
+00000  
+00110  
+00000  
+00000  
+00000
+
+Example 1: Output
+00000  
+00000  
+00220  
+00000  
+00000
+
+Example 2: Input
+000000  
+000000  
+010000  
+011000  
+000000
+
+Example 2: Output
+000000  
+000000  
+000000  
+020000  
+022000
+
+Transformation applied:
+
+1. Move color 1 object 1 pixel down
+2. Recolor color 1 object to color 2
+
+Task 3:
+
+Example 1: Input
+111  
+000  
+000
+
+Example 1: Output
+000  
+111  
+000
+
+Example 2: Input
+000  
+111  
+000
+
+Example 2: Output
+000  
+000  
+111
+
+Example 3: Input
+010  
+110  
+000
+
+Example 3: Output
+000  
+010  
+110
+
+Example 4: Input
+022  
+002  
+000
+
+Example 4: Output
+000  
+022  
+002
+
+Transformation applied:
+1. Move all color objects one pixel down while preserving their order
+
+End of example Tasks
+
+Beginning of your task:
+"""
+
     # Get the string representation of the task
     task_string = json_task_to_string(challenge_tasks, task_id, test_input_index)
+
+    # Combine the CoT example and task string into the prompt
+    context_prompt = cot_string + "\n" + task_string
 
     # Prompt template 1
     prompt = PromptTemplate(
         template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
                  "We will engage in tasks that require reasoning and logic.\n"
                  "You will be presented with grids made up of numbers.\n"
-                 "Number 0 represents empty cells and the other numbers represent objects or patterns on the grid.\n"
-                 "For each task, you will receive a few examples that demonstrate the transformation from an input to an output grid.\n"
-                 "After the examples you'll receive a new input grid called Test.\n"                
-                 "Your task is to determine the corresponding output grid from the transformation you can infer from the examples.\n"
-                 "Use the same format as the one provided in the examples for your answer.\n"
-                 "Do not give any justification for your answer, just provide the output grid.\n"
-                 "\n\n{task_string}\n",
-        input_variables=["task_string"]
+                 "Number 0 represents the background and the other numbers represent objects or patterns on the grid.\n"
+                 "First you will be shown some example tasks together with the identified transformation(s).\n"
+                 "Then you will be presented with a novel task. Follow these steps:\n"
+                 "1. Carefully analyze each input-output example in the task and identify the transformation.\n"
+                 "2. Describe the transformation step by step.\n"
+                 "3. Apply the identified transformation to the Test input grid to generate the output grid.\n"
+                 "4. Use the marker '---Analysis Start---' before providing your analysis of the transformation.\n"                
+                 "5. Use the marker '---Output Grid Start---' before providing the final output grid.\n"
+                 "6. Use the same format as the one provided in the examples for your output grid.\n"
+                 "7. Use the marker '---Output Grid End---' at the end of the final output grid.\n"
+                 "\n\n{context_prompt}\n",
+        input_variables=["context_prompt"]
     )
 
     # Generate the full prompt
-    formatted_prompt = prompt.format(task_string=task_string)
+    formatted_prompt = prompt.format(context_prompt=context_prompt)
 
     # Log the prompt
     logger.info(f"Prompt:\n{formatted_prompt}")
@@ -113,30 +262,29 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
     response = llm.invoke(formatted_prompt)
 
     # Log the raw LLM response for debugging
-    logger.info(f"Raw LLM Response: {response.content}")
+    #logger.info(f"Raw LLM Response: {response.content}")
 
     # Check if the response content is empty
     if not response.content.strip():
         logger.error(f"Empty response received from LLM for Task ID {task_id}, Test Input Index {test_input_index}")
         return []  # Return an empty list if the response is empty
 
-    # Extract the actual prediction from the response content
-    prediction_string = response.content
+    # Parse the response to extract analysis and grid
+    analysis, prediction = parse_prediction_with_analysis(response.content)
 
-    # Parse the prediction string into a list of lists of integers
-    try:
-        prediction = parse_prediction(prediction_string)
-    except Exception as e:
-        logger.error(f"Failed to parse prediction: {e}")
-        prediction = []  # Assign an empty list if parsing fails
+    # Log the analysis of transformation separately
+    logger.info(f"Analysis of transformations for Task ID {task_id}, Test Input Index {test_input_index}:\n{analysis}\n")
 
-    # Log the prediction
-    logger.info(f"Prediction:\n{prediction_string}\n")
+    # Format the prediction for readability
+    formatted_prediction = "\n".join("".join(str(num) for num in row) for row in prediction)
+
+    # Log the formatted prediction
+    logger.info(f"Prediction for Task ID {task_id}, Test Input Index {test_input_index}:\n{formatted_prediction}")
 
     # Also log the correct solution
-    correct_solution = solutions[task_id][test_input_index]  # Get the correct solution
-    solution_string = "\n".join([''.join(map(str, row)) for row in correct_solution])  # Format the solution as a string
-    logger.info(f"Solution:\n{solution_string}\n")
+    correct_solution = solutions[task_id][test_input_index]
+    formatted_solution = "\n".join("".join(str(num) for num in row) for row in correct_solution)
+    logger.info(f"Solution:\n{formatted_solution}")
 
     return prediction
 
