@@ -327,6 +327,8 @@ Example 3: Output
 Transformation applied:  
 1. Add number 7 cells in empty locations adjacent to number 4 cells so that together they form three by three objects.
 Example tasks end. 
+
+Start of your task
 """
 
     # Get the string representation of the task

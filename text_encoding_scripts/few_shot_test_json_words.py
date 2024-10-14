@@ -80,7 +80,8 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
     prompt = PromptTemplate(
         template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
                  "We will engage in tasks that require reasoning and logic.\n"
-                 "You will be presented with grids of colored cells. Black color represents the background and the other colors represent objects or patterns on the grid.\n"
+                 "You will be presented with grids of colored cells.\n"
+                 "Black color represents the background and the other colors represent objects or patterns on the grid.\n"
                  "For each task, you will receive a few examples that demonstrate the transformation from an input to an output grid.\n"
                  "After the examples you'll receive a new input grid called Test.\n"                
                  "Your task is to determine the corresponding output grid from the transformation you can infer from the examples.\n"
@@ -240,15 +241,15 @@ def main(task_set='training'):
             break
         elif model_choice == "4":
             model_name = "o1-mini"
-            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, temperature=1.0)
             break
         elif model_choice == "5":
             model_name = "o1-preview"
-            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, temperature=1.0)
             break
         elif model_choice == "6":
             model_name = "claude-3-5-sonnet-20240620"
-            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0, top_p=0.1, top_k=10 )
+            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0)
             break
         else:
             print("Invalid input. Please enter 1, 2, 3, 4, 5, or 6.")    

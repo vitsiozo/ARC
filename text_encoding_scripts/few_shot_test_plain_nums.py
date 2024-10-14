@@ -113,7 +113,7 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
     response = llm.invoke(formatted_prompt)
 
     # Log the raw LLM response for debugging
-    logger.info(f"Raw LLM Response: {response.content}")
+    #logger.info(f"Raw LLM Response: {response.content}")
 
     # Check if the response content is empty
     if not response.content.strip():
@@ -260,11 +260,11 @@ def main(task_set='training'):
             break
         elif model_choice == "4":
             model_name = "o1-mini"
-            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, temperature=1.0)
             break
         elif model_choice == "5":
             model_name = "o1-preview"
-            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, temperature=1.0)
             break
         elif model_choice == "6":
             model_name = "claude-3-5-sonnet-20240620"

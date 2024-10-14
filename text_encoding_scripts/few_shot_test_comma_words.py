@@ -112,14 +112,15 @@ def get_task_prediction(challenge_tasks, solutions, logger, task_id, test_input_
 
     # Prompt template 1
     prompt = PromptTemplate(
-        template="You are a chatbot with human-like reasoning and abstraction capabilities. "
-                 "We will engage in tasks that require reasoning and logic. "
-                 "Each task will demonstrate a transformation from an input to an output grid. "
-                 "For each task, you will receive a few examples that demonstrate the transformation from input to output. "
-                 "After the examples you'll receive a new input grid called Test. "                
-                 "Your task is to determine the corresponding output grid from the transformation you are able to infer from the examples. "
-                 "Use the same format as the one provided in the examples for your answer. "
-                 "Do not give any justification for your answer, just provide the output grid. "
+        template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
+                 "We will engage in tasks that require reasoning and logic.\n"
+                 "You will be presented with grids of colored cells.\n"
+                 "Black color represents the background and the other colors represent objects or patterns on the grid.\n"
+                 "For each task, you will receive a few examples that demonstrate the transformation from an input to an output grid.\n"
+                 "After the examples you'll receive a new input grid called Test.\n"                
+                 "Your task is to determine the corresponding output grid from the transformation you can infer from the examples.\n"
+                 "Use the same format as the one provided in the examples for your answer.\n"
+                 "Do not give any justification for your answer, just provide the output grid.\n"
                  "\n\n{task_string}\n",
         input_variables=["task_string"]
     )
@@ -280,11 +281,11 @@ def main(task_set='training'):
             break
         elif model_choice == "4":
             model_name = "o1-mini"
-            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, temperature=1.0)
             break
         elif model_choice == "5":
             model_name = "o1-preview"
-            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, max_tokens=3000, temperature=0.0)
+            llm = ChatOpenAI(model=model_name, api_key=OPENAI_API_KEY, temperature=1.0)
             break
         elif model_choice == "6":
             model_name = "claude-3-5-sonnet-20240620"
