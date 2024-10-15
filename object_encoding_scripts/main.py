@@ -63,12 +63,13 @@ def get_task_prediction(task_data, task_id, encoding) -> List[List]:
 
     # Prompt template
     prompt = PromptTemplate(
-        template="You are a reasoning assistant adept at solving abstract reasoning tasks. "
-                 "Given the abstracted representations of training examples (inputs and outputs), "
-                 "infer the transformation and apply it to the test input to produce the output grid. "
-                 "Provide the output grid exactly in the same format as the examples, including 'Image size' and 'Objects'. "
-                 "Ensure the 'Image size' is in the format (height, width). "
-                 "Do not include any explanations or extra text.\n{task_string}\n\nYour Response:",
+        template="You are a chatbot with human-like reasoning and abstraction capabilities.\n"
+                 "We will engage in tasks that require reasoning and logic.\n"
+                 "For each task, you will receive a few examples that demonstrate the transformation from an input to an output image.\n"
+                 "After the examples you'll receive a new input image called test_input.\n"                
+                 "Your task is to determine the corresponding output image from the transformation you can infer from the examples.\n"
+                 "Use the same format as the one provided in the examples for your answer.\n"
+                 "Do not give any justification or extra text for your answer, just provide the output image.\n{task_string}\n\nYour Response:",
         input_variables=["task_string"]
     )
 
@@ -148,7 +149,9 @@ def parse_model_response_to_grid(response_text, encoding='object_json', mode='Ou
     }
 
     # Parsing size pattern for grid dimensions
-    size_pattern = rf'{mode}size:\((\d+),(\d+)\)'
+    size_pattern = r'Image\s*size\s*:\s*\((\d+),\s*(\d+)\)'
+    #size_pattern = r'Imagesize:\((\d+),(\d+)\)'
+    #size_pattern = rf'{mode}size:\((\d+),(\d+)\)'
     size_match = re.findall(size_pattern, response_text)
     if not size_match:
         logger.error("Failed to find image size in the model's response.")

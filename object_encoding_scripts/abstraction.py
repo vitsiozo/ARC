@@ -53,24 +53,46 @@ class Image:
         return graph
 
     def get_non_black_components_graph(self, graph=None):
+
         if not graph:
             graph = self.get_2d_grid_graph()
 
         non_black_components_graph = nx.Graph()
 
+        # for color in self.colors_included:
         node_id = 1
-        for color in range(1, 10):  # Colors 1 to 9 (excluding black which is 0)
+        for color in range(10):
+            if color == 0:
+                continue
             color_nodes = (node for node, data in graph.nodes(data=True) if data.get("color") == color)
             color_subgraph = graph.subgraph(color_nodes)
             color_connected_components = connected_components(color_subgraph)
-            for component in color_connected_components:
-                non_black_components_graph.add_node(
-                    node_id,
-                    coordinates=sorted(component),
-                    color=color,
-                    size=len(component)
-                )
+            for i, component in enumerate(color_connected_components):
+                # non_black_components_graph.add_node((color, i), pixels=list(component), color=color, size=len(list(component)))
+                non_black_components_graph.add_node(node_id, coordinates=sorted(list(component)), color=color, size=len(list(component)))
                 node_id += 1
+        for node_1, node_2 in combinations(non_black_components_graph.nodes, 2):
+            nodes_1 = non_black_components_graph.nodes[node_1]["coordinates"]
+            nodes_2 = non_black_components_graph.nodes[node_2]["coordinates"]
+            for n1 in nodes_1:
+                for n2 in nodes_2:
+                    if n1[0] == n2[0]:  # two nodes on the same row
+                        for column_index in range(min(n1[1], n2[1])+1, max(n1[1], n2[1])):
+                            if graph.nodes[n1[0], column_index]["color"] != 0:
+                                break
+                        else:
+                            non_black_components_graph.add_edge(node_1, node_2, direction="horizontal")
+                            break
+                    elif n1[1] == n2[1]:  # two nodes on the same column:
+                        for row_index in range(min(n1[0], n2[0])+1, max(n1[0], n2[0])):
+                            if graph.nodes[row_index, n1[1]]["color"] != 0:
+                                break
+                        else:
+                            non_black_components_graph.add_edge(node_1, node_2, direction="vertical")
+                            break
+                else:
+                    continue
+                break
 
         self.abstracted_graph = non_black_components_graph
         self.abstraction = "nbccg"
@@ -614,14 +636,14 @@ def generate_abstracted_task(task_data, task_id, encoding="object_json"):
         abstracted_task_str += f'\n--- Pair {idx+1} ---\n'
         abstracted_task_str += f'Input Image ({input_image.name}):\n'
         abstracted_task_str += f'Image size: {input_image.image_size}\n'
-        abstracted_task_str += 'Objects:\n'
+        #abstracted_task_str += 'Objects:\n'
         input_encoding = input_image.get_graph_encoded_string(encoding=encoding)
         abstracted_task_str += f'{input_encoding}\n'
 
         if output_image:
             abstracted_task_str += f'Output Image ({output_image.name}):\n'
             abstracted_task_str += f'Image size: {output_image.image_size}\n'
-            abstracted_task_str += 'Objects:\n'
+            #abstracted_task_str += 'Objects:\n'
             output_encoding = output_image.get_graph_encoded_string(encoding=encoding)
             abstracted_task_str += f'{output_encoding}\n'
 
