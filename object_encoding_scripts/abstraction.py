@@ -8,7 +8,7 @@ from itertools import combinations
 
 class Image:
     """
-    Use the abstraction on the task and return using specified encoding
+    Use the abstraction on file for the task and return using the user specified encoding
     """
 
     # Mapping from digits to words (if needed for encoding)
@@ -590,7 +590,7 @@ def get_abstraction_method(task_id):
         with open(solutions_file, 'r') as f:
             solutions_data = json.load(f)
         abstraction_method_name = solutions_data.get("abstraction", "nbccg")
-        #print(f"Using abstraction method '{abstraction_method_name}' from solutions file.")
+        #print(f"Found abstraction method '{abstraction_method_name}' from solutions file for {task_id}.")
     else:
         abstraction_method_name = "nbccg"
         print(f"Solutions file not found for task {task_id}. Defaulting to abstraction method '{abstraction_method_name}'.")
@@ -602,33 +602,55 @@ def get_abstraction_method(task_id):
 
     return abstraction_method_name
 
-def generate_abstracted_task(task_data, task_id, encoding="object_json"):
+def generate_abstracted_task(task_data, task_id, encoding="object_json", test_input_index=None):
     """
     Generates the abstracted representation of a task using the appropriate abstraction method.
+    
+    Args:
+        task_data: The task data containing 'train' and 'test' examples.
+        task_id: The unique ID of the task being processed.
+        encoding: The encoding method used (e.g., 'object_json').
+        test_input_index: The index of the test input to generate the abstraction for. If None, process all test inputs.
+    
+    Returns:
+        A string representing the abstracted task (training examples + one specific test input).
     """
     abstraction_method_name = get_abstraction_method(task_id)
-    
     images = []
 
-    # Process training examples
+    # Process training examples (included in the prompt for every test input)
     for idx, pair in enumerate(task_data['train']):
         input_image = Image(grid=pair['input'], name=f'train_input_{idx+1}')
         output_image = Image(grid=pair['output'], name=f'train_output_{idx+1}')
-        # Call the selected abstraction method
+        
+        # Call the selected abstraction method on the training images
         abstraction_method = Image.abstraction_ops[abstraction_method_name]
         getattr(input_image, abstraction_method)()
         getattr(output_image, abstraction_method)()
+        
         images.append((input_image, output_image))
 
     # Process test examples
-    for idx, pair in enumerate(task_data.get('test', [])):
-        input_image = Image(grid=pair['input'], name=f'test_input_{idx+1}')
+    if test_input_index is not None:
+        # Only process the specific test input based on the provided index
+        pair = task_data['test'][test_input_index]
+        input_image = Image(grid=pair['input'], name=f'test_input_{test_input_index+1}')
         getattr(input_image, abstraction_method)()
         output_image = None
         if 'output' in pair:
-            output_image = Image(grid=pair['output'], name=f'test_output_{idx+1}')
+            output_image = Image(grid=pair['output'], name=f'test_output_{test_input_index+1}')
             getattr(output_image, abstraction_method)()
         images.append((input_image, output_image))
+    else:
+        # Process all test inputs if no specific index is provided (this can be used for debugging)
+        for idx, pair in enumerate(task_data.get('test', [])):
+            input_image = Image(grid=pair['input'], name=f'test_input_{idx+1}')
+            getattr(input_image, abstraction_method)()
+            output_image = None
+            if 'output' in pair:
+                output_image = Image(grid=pair['output'], name=f'test_output_{idx+1}')
+                getattr(output_image, abstraction_method)()
+            images.append((input_image, output_image))
 
     # Create string or JSON encodings
     abstracted_task_str = ""
@@ -636,15 +658,14 @@ def generate_abstracted_task(task_data, task_id, encoding="object_json"):
         abstracted_task_str += f'\n--- Pair {idx+1} ---\n'
         abstracted_task_str += f'Input Image ({input_image.name}):\n'
         abstracted_task_str += f'Image size: {input_image.image_size}\n'
-        #abstracted_task_str += 'Objects:\n'
         input_encoding = input_image.get_graph_encoded_string(encoding=encoding)
         abstracted_task_str += f'{input_encoding}\n'
 
         if output_image:
             abstracted_task_str += f'Output Image ({output_image.name}):\n'
             abstracted_task_str += f'Image size: {output_image.image_size}\n'
-            #abstracted_task_str += 'Objects:\n'
             output_encoding = output_image.get_graph_encoded_string(encoding=encoding)
             abstracted_task_str += f'{output_encoding}\n'
 
     return abstracted_task_str
+
