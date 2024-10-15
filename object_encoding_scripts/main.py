@@ -51,14 +51,14 @@ def load_tasks_from_file(task_set):
 
     return challenges, solutions
 
-def get_task_prediction(task_data, task_id) -> List[List]:
+def get_task_prediction(task_data, task_id, encoding) -> List[List]:
     # Generate the abstracted task string by calling the function from abstraction.py
-    task_string = generate_abstracted_task(task_data, task_id)
+    task_string = generate_abstracted_task(task_data, task_id, encoding=encoding)
 
     # Get the abstraction method for this task
     abstraction_method_name = get_abstraction_method(task_id)
+    logger.info(f"Using abstraction method '{abstraction_method_name}' for Task ID: {task_id}")
     multicolor_abs = ['mcccg', 'mcccg_d']  # List of multicolor abstraction methods
-    encoding = 'object_json'  # Adjust based on your encoding
     mode = 'Output'  # Assuming 'Output' is used in the response
 
     # Prompt template
@@ -91,7 +91,6 @@ def get_task_prediction(task_data, task_id) -> List[List]:
     grid = parse_model_response_to_grid(
         prediction_string,
         encoding=encoding,
-        mode=mode,
         abstraction=abstraction_method_name,
         multicolor_abs=multicolor_abs
     )
@@ -105,7 +104,7 @@ def get_task_prediction(task_data, task_id) -> List[List]:
 
     return grid
 
-def run_model(challenges, solutions, NUM_TASKS=None):
+def run_model(challenges, solutions, NUM_TASKS=None, encoding='object_json'):
     results = {}
 
     task_ids = list(challenges.keys())
@@ -117,7 +116,7 @@ def run_model(challenges, solutions, NUM_TASKS=None):
         task_data = challenges[task_id]
 
         # Get the prediction for the task
-        prediction = get_task_prediction(task_data, task_id)
+        prediction = get_task_prediction(task_data, task_id, encoding=encoding)
 
         # Store the prediction
         results[task_id] = prediction
@@ -138,29 +137,49 @@ def parse_model_response_to_grid(response_text, encoding='object_json', mode='Ou
     Returns:
         list: A 2D list representing the grid.
     """
+    # Remove all whitespace and newlines for easier parsing
     response_text = response_text.replace(' ', '').replace('\n', '')
 
-    if encoding == "object_descriptor":
-        size_pattern = rf'{mode}Image\({{.*?}}\):Imagesize:\((\d+),(\d+)\)'
-        size_match = re.findall(size_pattern, response_text)
-        if not size_match:
-            logger.error("Failed to find image size in the model's response.")
-            return []
-        height, width = int(size_match[0][0]), int(size_match[0][1])
-        grid = [[0 for _ in range(width)] for _ in range(height)]
+    word_to_digit = {
+        'black': 0, 'blue': 1, 'red': 2, 'green': 3,
+        'yellow': 4, 'gray': 5, 'purple': 6, 'orange': 7,
+        'cyan': 8, 'brown': 9, "0": 0, "1": 1, "2": 2,
+        "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9
+    }
+
+    # Parsing size pattern for grid dimensions
+    size_pattern = rf'{mode}size:\((\d+),(\d+)\)'
+    size_match = re.findall(size_pattern, response_text)
+    if not size_match:
+        logger.error("Failed to find image size in the model's response.")
+        return []
+    
+    height, width = int(size_match[0][0]), int(size_match[0][1])
+    grid = [[0 for _ in range(width)] for _ in range(height)]
+
+    # Handle object descriptors (including with edges)
+    if encoding in ["object_descriptor", "object_descriptor_w_edge"]:
         if abstraction in multicolor_abs:
-            object_pattern = r'Object\d+:coordinates=\[(.*?)\],color=\[(.*?)\],size=\d+'
+            object_pattern = r'Object(\d+):coordinates=\[(.*?)\],color=\[(.*?)\],size=(\d+)'
+            if encoding == "object_descriptor_w_edge":
+                object_pattern += r',neighbors=\[(.*?)\]'
         else:
-            object_pattern = r'Object\d+:coordinates=\[(.*?)\],color=(\d+),size=\d+'
+            object_pattern = r'Object(\d+):coordinates=\[(.*?)\],color=(\d+),size=(\d+)'
+            if encoding == "object_descriptor_w_edge":
+                object_pattern += r',neighbors=\[(.*?)\]'
+        
         object_matches = re.findall(object_pattern, response_text)
         if not object_matches:
             logger.error("Failed to find objects in the model's response.")
             return []
+
         for match in object_matches:
-            coordinates_str, color = match
+            node_id, coordinates_str, color, size = match[:4]  # neighbors are optional
             coordinates = [tuple(map(int, coord.split(','))) for coord in coordinates_str.strip(")(").split('),(')]
+
+            # Handle multicolor abstraction
             if abstraction in multicolor_abs:
-                color = [int(c) for c in color.strip("[]").split(',')]
+                color = [int(c) for c in color.split(',')]
                 for indx, (rnum, cnum) in enumerate(coordinates):
                     try:
                         grid[rnum][cnum] = color[indx]
@@ -175,48 +194,63 @@ def parse_model_response_to_grid(response_text, encoding='object_json', mode='Ou
                         pass
         return grid
 
-    elif encoding == "object_json" or encoding == "object_json_words":
-        word_to_digit = {
-            'black': 0, 'blue': 1, 'red': 2, 'green': 3,
-            'yellow': 4, 'gray': 5, 'purple': 6, 'orange': 7,
-            'cyan': 8, 'brown': 9, "0": 0, "1": 1, "2": 2,
-            "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9
-        }
-        size_pattern = rf'Imagesize:\((\d+),(\d+)\)'
-        size_match = re.findall(size_pattern, response_text)
-        if not size_match:
-            logger.error("Failed to find image size in the model's response.")
-            return []
-        height, width = int(size_match[0][0]), int(size_match[0][1])
-        grid = [[0 for _ in range(width)] for _ in range(height)]
+    # Handle object_json or object_json_words encoding
+    elif encoding in ["object_json", "object_json_words", "object_json_w_edge"]:
         if abstraction in multicolor_abs:
-            object_pattern = r'"coordinates":\[(.*?)\],"color":\[(.*?)\],"size":\d+'
+            object_pattern = r'"coordinates":\[(.*?)\],"color":\[(.*?)\],"size":(\d+)'
         else:
-            if encoding != "object_json_words":
-                object_pattern = r'"coordinates":\[(.*?)\],"color":(\d+),"size":\d+'
+            if encoding == "object_json_words":
+                object_pattern = r'"coordinates":\[(.*?)\],"color":"(.*?)","size":(\d+)'
             else:
-                object_pattern = r'"coordinates":\[(.*?)\],"color":"(.*?)","size":\d+'
+                object_pattern = r'"coordinates":\[(.*?)\],"color":(\d+),"size":(\d+)'
+
         object_matches = re.findall(object_pattern, response_text)
         if not object_matches:
             logger.error("Failed to find objects in the model's response.")
             return []
+
         for match in object_matches:
-            coordinates_str, color = match
-            coordinates = [tuple(map(int, coord.split(','))) for coord in re.findall(r'\[(\d+),(\d+)\]', coordinates_str)]
+            coordinates_str, color, size = match
+            coordinates = [tuple(map(int, coord.split(','))) for coord in coordinates_str.strip("][").split('],[')]
+
+            # Handle multicolor abstraction
             if abstraction in multicolor_abs:
-                color = [int(c) for c in re.findall(r'\d+', color)]
+                color = [int(c) for c in color.split(',')]
                 for indx, (rnum, cnum) in enumerate(coordinates):
                     try:
                         grid[rnum][cnum] = color[indx]
                     except IndexError:
                         pass
             else:
-                color = word_to_digit.get(color.strip("\"\'"), 0)
+                if encoding == "object_json_words":
+                    color = word_to_digit.get(color.strip("\"\'"), 0)
+                else:
+                    color = int(color)
                 for (rnum, cnum) in coordinates:
                     try:
                         grid[rnum][cnum] = color
                     except IndexError:
                         pass
+        return grid
+
+    # Handle graph-like encodings
+    elif encoding == "node_edge_set":
+        # Parse nodes and edges (for `node_edge_set` encoding)
+        node_pattern = r'Node(\d+):coordinates=\[(.*?)\],color=(\d+),size=(\d+)'
+        node_matches = re.findall(node_pattern, response_text)
+        if not node_matches:
+            logger.error("Failed to find nodes in the model's response.")
+            return []
+
+        for match in node_matches:
+            node_id, coordinates_str, color, size = match
+            coordinates = [tuple(map(int, coord.split(','))) for coord in coordinates_str.strip(")(").split('),(')]
+            color = int(color)
+            for (rnum, cnum) in coordinates:
+                try:
+                    grid[rnum][cnum] = color
+                except IndexError:
+                    pass
         return grid
 
     else:
@@ -248,6 +282,35 @@ def main(task_set='training'):
     # Load datasets
     challenges, solutions = load_tasks_from_file(task_set=task_sets[task_set])
 
+    # Prompt the user to select the encoding type
+    print("Please select the encoding type:")
+    print("1) Object JSON")
+    print("2) Object Descriptor")
+    print("3) Object JSON with edge")
+    print("4) Object Descriptor with edge")
+    print("5) Object JSON with words")
+
+    while True:
+        try:
+            encoding_choice = int(input("Select 1-5: "))
+            if encoding_choice not in range(1, 6):
+                raise ValueError("Invalid selection. Please choose a number between 1 and 5.")
+            break
+        except ValueError as e:
+            print(e)
+
+    # Map user choice to the corresponding encoding type
+    encoding_map = {
+        1: 'object_json',
+        2: 'object_descriptor',
+        3: 'object_json_w_edge',
+        4: 'object_descriptor_w_edge',
+        5: 'object_json_words'
+    }
+
+    # Get the selected encoding type
+    encoding = encoding_map[encoding_choice]
+
     # Ask the user for the number of tasks they want to run
     while True:
         try:
@@ -265,7 +328,7 @@ def main(task_set='training'):
             logger.error("Invalid input. Please enter a numerical value or 'all'.")
 
     # Run the model
-    test_results = run_model(challenges, solutions, NUM_TASKS=NUM_TASKS)
+    test_results = run_model(challenges, solutions, NUM_TASKS=NUM_TASKS, encoding=encoding)
 
     # Score the results
     score_result = score_results(results=test_results, solutions=solutions)
