@@ -12,11 +12,8 @@ class Image:
     """
 
     # Mapping from digits to words (if needed for encoding)
-    digit_to_word = {
-        0: 'black', 1: 'blue', 2: 'red', 3: 'green',
-        4: 'yellow', 5: 'grey', 6: 'fuchsia', 7: 'orange',
-        8: 'teal', 9: 'brown'
-    }
+    digit_to_word = {0: 'black', 1: 'blue', 2: 'red', 3: 'green', 4: 'yellow', 5: 'gray', 6: 'purple', 7: 'orange',
+                     8: 'cyan', 9: 'brown'}
 
     # Dictionary mapping abstraction names to methods
     abstraction_ops = {
@@ -35,15 +32,24 @@ class Image:
         self.name = name
         self.grid = grid
         self.height = len(grid)
-        self.width = len(grid[0]) if self.height > 0 else 0
+        self.width = len(grid[0])
         self.image_size = (self.height, self.width)
-        self.background_color = self._determine_background_color()
-        self.abstracted_graph = None
 
-    def _determine_background_color(self):
-        # Determine the most common color (background color)
-        colors = [color for row in self.grid for color in row]
-        return max(set(colors), key=colors.count) if colors else 0
+        colors = []
+        for r, row in enumerate(grid):
+            for c, color in enumerate(row):
+                colors.append(color)
+        if len(colors) != 0:
+            self.most_common_color = max(set(colors), key=colors.count)
+            self.least_common_color = min(set(colors), key=colors.count) 
+        self.colors = colors
+        self.colors_included = set(colors)
+
+        self.background_color = max(set(colors), key=colors.count) if 0 not in colors else 0
+
+        self.abstracted_graph = None
+        self.abstraction = None
+        self.corners = {(0, 0), (0, self.width - 1), (self.height - 1, 0), (self.height - 1, self.width - 1)}
 
     def get_2d_grid_graph(self, top_down=True):
         graph = nx.grid_2d_graph(self.height, self.width)
