@@ -296,7 +296,7 @@ def main(task_set='training'):
             break
         elif model_choice == "6":
             model_name = "claude-3-5-sonnet-20240620"
-            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0, top_p=0.1, top_k=10)
+            llm = ChatAnthropic(model=model_name, api_key=ANTHROPIC_API_KEY, max_tokens=3000, temperature=0.0)
             break
         else:
             print("Invalid input. Please enter 1, 2, 3, 4, 5, or 6.")    
