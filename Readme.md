@@ -88,4 +88,7 @@ Directories in this repository and their usage:
       cot_few_shot when CoT was used  
 
 5) **log_obj_output** Directory  
-   Contains the logs of all the test that were performed using the object-based encodings.   
+   Contains the logs of all the test that were performed using the object-based encodings.
+
+6) **utils** Directory  
+   contains various utilities for generating plots and figures, task extractions, conversions and various other tests.
