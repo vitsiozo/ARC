@@ -10,7 +10,7 @@ Directories in this repository and their usage:
    or the format used in the ARC-Prize competition 2024 under arc-prize-2024/  
 
    The 50 ARC tasks used in this analysis can be found under subset50/ as individual .json files and also in the files  
-   50_word_in_quotes_challenges.json and 50_word_in_quotes_solutions.json  
+   50_challenges.json and 50_solutions.json  
    containing all 50 challenges and their corresponding 50 solutions respectively  
 
    The images of the tasks used to prompt multimodal LLMs are found under vision_dataset/  

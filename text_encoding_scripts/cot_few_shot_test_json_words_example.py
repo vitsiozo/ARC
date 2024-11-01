@@ -1,3 +1,9 @@
+# Script for direct-grid experiments using Chain of Thought techniques  
+#
+# The following Kaggle notebook has been used as the starting point for this script:
+# https://www.kaggle.com/code/gregkamradt/using-frontier-models-on-arc-agi-via-langchain
+#
+
 import os
 import re
 import json
